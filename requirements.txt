@@ -1,2 +1,4 @@
 Django<5
 requests
+djangorestframework
+markdown
