@@ -1,0 +1,9 @@
+*.pyc
+venv/
+mysite/secrets.py
+*.sqlite3
+\.vagrant
+node_modules/
+Vagrantfile
+frontend/public
+package-lock.json
