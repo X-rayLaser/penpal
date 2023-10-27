@@ -1,6 +1,11 @@
 const path = require('path');
 
 module.exports = {
+  mode: 'development',
+  watchOptions: {
+    poll: true,
+    ignored: /node_modules/
+  },
   entry: './frontend/src/index.js',
   output: {
     filename: 'main.js',

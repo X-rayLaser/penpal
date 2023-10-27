@@ -4,6 +4,33 @@ from rest_framework.response import Response
 from .models import Chat, Message
 from .serializers import ChatSerializer, MessageSerializer
 
+from django.http.response import StreamingHttpResponse, HttpResponseNotAllowed
+from django.views.decorators.csrf import csrf_exempt
+
+@csrf_exempt
+def generate_completion(request):
+    def generate():
+        import time
+        import json
+        words = ["This", " ", "is", " ", "a", " ", "test"]
+
+        for token in words[:-1]:
+            yield json.dumps({
+                "data": token,
+                "stop": False
+            })
+            time.sleep(1)
+        
+        yield json.dumps({
+            "data": words[-1],
+            "stop": True
+        })
+
+    if request.method == 'POST':
+        return StreamingHttpResponse(generate())
+    
+    return HttpResponseNotAllowed(["POST"])
+
 
 @api_view(['GET', 'POST'])
 def chat_list(request):
