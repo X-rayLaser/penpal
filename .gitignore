@@ -1,9 +1,12 @@
 *.pyc
 venv/
 mysite/secrets.py
+mysite/local_settings.py
 *.sqlite3
 \.vagrant
 node_modules/
 Vagrantfile
 frontend/public
 package-lock.json
+llama.cpp
+*.log

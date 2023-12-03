@@ -1,35 +1,42 @@
+import json
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from .models import Chat, Message
-from .serializers import ChatSerializer, MessageSerializer
-
-from django.http.response import StreamingHttpResponse, HttpResponseNotAllowed
+from .serializers import ChatSerializer, MessageSerializer, TreebankSerializer
+import llm_utils
+from django.http.response import StreamingHttpResponse, HttpResponseNotAllowed, HttpResponseBadRequest
 from django.views.decorators.csrf import csrf_exempt
+
 
 @csrf_exempt
 def generate_completion(request):
-    def generate():
-        import time
-        import json
-        words = ["This", " ", "is", " ", "a", " ", "test"]
-
-        for token in words[:-1]:
-            yield json.dumps({
-                "data": token,
-                "stop": False
-            })
-            time.sleep(1)
-        
-        yield json.dumps({
-            "data": words[-1],
-            "stop": True
-        })
-
     if request.method == 'POST':
-        return StreamingHttpResponse(generate())
+        body = json.loads(request.body)
+        prompt = body.get("prompt")
+        clear_context = body.get("clear_context", False)
+
+        if prompt:
+            print("about to start streaming")
+            response = StreamingHttpResponse(llm_utils.stream_tokens(prompt, clear_context))
+            return response
+        return HttpResponseBadRequest("Expected 'prompt' field in json request body")
     
     return HttpResponseNotAllowed(["POST"])
+
+
+@csrf_exempt
+def clear_llm_context(request):
+    if request.method == 'POST':
+        llm_utils.clear_context()
+        return Response({})
+    
+    return HttpResponseNotAllowed(["POST"])
+
+
+@csrf_exempt
+def generate_reply(request):
+    return generate_completion(request)
 
 
 @api_view(['GET', 'POST'])
@@ -61,6 +68,20 @@ def chat_detail(request, pk):
     if request.method == 'DELETE':
         chat.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(['GET'])
+def treebank_detail(request, pk):
+    try:
+        chat = Chat.objects.get(pk=pk)
+    except Chat.DoesNotExist:
+        return Response(status=status.HTTP_404_NOT_FOUND)
+
+    if not chat.prompt:
+        return Response({}, status=status.HTTP_200_OK)
+
+    serializer = TreebankSerializer(chat.prompt)
+    return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 @api_view(['GET', 'POST'])

@@ -3,7 +3,8 @@ from django.contrib.auth.models import User
 
 
 class Chat(models.Model):
-    prompt = models.OneToOneField('Message', on_delete=models.CASCADE)
+    prompt = models.OneToOneField('Message', related_name='chat', on_delete=models.SET_NULL,
+                                  blank=True, null=True)
     human = models.ForeignKey(User, related_name='chats', blank=True, null=True,
                               on_delete=models.CASCADE)
 
