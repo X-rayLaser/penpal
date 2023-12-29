@@ -21,6 +21,16 @@ class DummyAdapter(LLMAdapter):
         yield random.choice(words)
 
 
+class DummyMarkdownAdapter(LLMAdapter):
+    def stream_tokens(self, prompt, clear_context=False):
+        tokens = ["Of", " ", "course", ".", " ", "Here" " ", "is", " ", "the", " ", "code", ":", "\n", 
+                  "``", "`", "python", "\n", "for", " ", "i", " in", " ", "range", "(", "5", ")", 
+                  ":", "\n", "    ", "print", "(", "'", "hello", " ", "world", "'", ")", "\n", "```"]
+        for token in tokens:
+            time.sleep(0.25)
+            yield token
+
+
 class RemoteLLMAdapter(LLMAdapter):
     def __init__(self, host, port):
         self.host = host

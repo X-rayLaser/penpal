@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import Chat, Message
+import markdown
 
 
 class ChatSerializer(serializers.ModelSerializer):
@@ -11,10 +12,15 @@ class ChatSerializer(serializers.ModelSerializer):
 
 class MessageSerializer(serializers.ModelSerializer):
     chat = serializers.PrimaryKeyRelatedField(many=False, required=False, queryset=Chat.objects.all())
+    html = serializers.SerializerMethodField()
+    
     class Meta:
         model = Message
-        fields = ['id', 'text', 'date_time', 'generation_details', 'parent', 'replies', 'chat']
+        fields = ['id', 'text', 'html', 'date_time', 'generation_details', 'parent', 'replies', 'chat']
         read_only_fields = ['replies']
+
+    def get_html(self, obj):
+        return markdown.markdown(obj.text, extensions=['fenced_code'])
 
     def create(self, validated_data):
         print(validated_data)

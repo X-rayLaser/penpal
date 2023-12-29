@@ -6,36 +6,10 @@ import Card from 'react-bootstrap/Card';
 import Pagination from 'react-bootstrap/Pagination';
 import { streamJsonResponse } from './utils';
 import { withRouter } from "./utils";
-
-
-class PathItem {
-    constructor(branchId, prefixLength, node, parent) {
-        this.branchId = branchId
-        this.prefixLength = prefixLength
-        this.node = node
-        this.parent = parent
-    }
-}
-
-
-function getConversationThread(chatTree, treePath) {
-    let messages = [];
-
-    treePath.forEach((item, index) => {
-        messages.push({
-            text: item.node.text,
-            key: index,
-            pathItem: item
-        });
-    });
-
-    return messages;
-}
-
-
-function isHumanText(index) {
-    return index % 2 === 0;
-}
+import { 
+    fetchTree, addNode, addMessage, selectThread, appendThread, collapseThread,
+    getNodeById, getThreadMessages, getConversationText, isHumanText
+} from './tree';
 
 
 class TextTemplate {
@@ -49,27 +23,15 @@ class TextTemplate {
 };
 
 
-function getConversationText(chatTree, treePath, questionTemplate, answerTemplate) {
-    let messages = getConversationThread(chatTree, treePath);
-    let result = "";
-    messages.forEach((msg, index) => {
-        let template = isHumanText(index) ? questionTemplate : answerTemplate;
-        result += template.render(msg.text);
-    });
-
-    return result;
-}
-
-
 function ConversationTree(props) {
-    let messages = getConversationThread(props.tree, props.treePath);
+    let messages = getThreadMessages(props.tree, props.treePath);
 
     const items = messages.map(msg => {
         if (isHumanText(msg.key)) {
             return <HumanMessage key={msg.key} text={msg.text} pathItem={msg.pathItem} 
-                    onBranchSwitch={props.onBranchSwitch} />
+                    message={msg} onBranchSwitch={props.onBranchSwitch} />
         } else {
-            return <AIMessage key={msg.key} text={msg.text} pathItem={msg.pathItem}
+            return <AIMessage key={msg.key} text={msg.text} pathItem={msg.pathItem} message={msg}
                     onBranchSwitch={props.onBranchSwitch}
                     onRegenerate={props.onRegenerate} />
         }
@@ -81,62 +43,23 @@ function ConversationTree(props) {
 }
 
 
-function getAppendedTree(tree, path, text, messageId) {
-    let treeCopy = JSON.parse(JSON.stringify(tree));
-    let pathCopy = copyTreePath(treeCopy, path);
-    console.log("getappendedtree:"); console.log(path); console.log(pathCopy);
-
-    let node = traverseTree(treeCopy, pathCopy);
-
-    let newNode = {
-        id: messageId,
-        text,
-        replies: []
-    };
-    node.replies.push(newNode);
-
-    pathCopy.push(new PathItem(node.replies.length - 1, pathCopy.length, newNode, node));
-
-    return {
-        tree: treeCopy,
-        leafIndex: node.replies.length - 1,
-        node: newNode,
-        parent: node,
-        path: pathCopy
-    };
-}
-
-function copyTreePath(tree, path) {
-    let node = tree;
-
-    let pathCopy = [];
-
-    for (let i = 0; i < path.length; i++) {
-        let item = path[i];
-        let parent = node;
-        node = node.replies[item.branchId];
-
-        pathCopy.push(new PathItem(item.branchId, item.prefixLength, node, parent));
-    }
-
-    return pathCopy;
-}
-
-
 function traverseTree(tree, path) {
     //check if path is empty, then return tree root
     if (path.length === 0) {
         return tree;
     }
+
     let item = path[path.length - 1];
-    return item.node;
+
+    return getNodeById(tree, item.nodeId);
 }
 
 
 function Message(props) {
-    let pathItem = props.pathItem
-    let numChildren = pathItem.parent.replies.length
-    let active = pathItem.branchId + 1;
+    let pathItem = props.pathItem;
+    let message = props.message;
+    let numSiblings = message.numSiblings;
+    let active = pathItem.branchIndex + 1;
     let items = [];
     
     let onRegenerate = props.onRegenerate;
@@ -144,13 +67,13 @@ function Message(props) {
     function getHandler(key) {
         return e => {
             if (key !== active) {
-                let newBranchId = key - 1
-                props.onBranchSwitch(pathItem, newBranchId);
+                let newBranchId = key - 1;
+                props.onBranchSwitch(message, newBranchId);
             }
         }
     }
     
-    for (let i = 1; i <= numChildren; i++) {
+    for (let i = 1; i <= numSiblings; i++) {
         const handler = getHandler(i);
         items.push(
             <Pagination.Item key={i} active={i === active} onClick={handler}>
@@ -158,11 +81,16 @@ function Message(props) {
             </Pagination.Item>
         );
     }
-    return (
+
+    let innerHtml = {
+        __html: message.data.html || message.data.text
+    };
+    
+    return (        
         <Card bg={props.bg} text={props.color} className="mb-3">
             <Card.Header>{props.header}</Card.Header>
             <Card.Body>
-                <Card.Text>{props.text}</Card.Text>
+                <pre dangerouslySetInnerHTML={innerHtml} />
             </Card.Body>
             <Card.Footer>
                 <div>
@@ -180,12 +108,12 @@ function Message(props) {
 
 function HumanMessage(props) {
     return <Message bg="light" color="dark" header="Human" text={props.text} pathItem={props.pathItem} 
-            onBranchSwitch={props.onBranchSwitch} />;
+            message={props.message} onBranchSwitch={props.onBranchSwitch} />;
 }
 
 function AIMessage(props) {
     return <Message bg="secondary" color="light" header="AI" text={props.text} pathItem={props.pathItem}
-            onBranchSwitch={props.onBranchSwitch} onRegenerate={props.onRegenerate} />;
+            message={props.message} onBranchSwitch={props.onBranchSwitch} onRegenerate={props.onRegenerate} />;
 }
 
 function ReplyInProgress(props) {
@@ -235,40 +163,13 @@ class ActiveChat extends React.Component {
     }
 
     componentDidMount() {
-        let id = this.props.router.params.id;
-        fetch(`/chats/treebanks/${id}/`, {
-            method: "GET",
-            headers: {
-                "Content-Type": "application/json"
-            }
-        }).then(response => response.json()).then(obj => {
-            let tree;
-            if (Object.keys(obj).length) {
-                tree = {
-                    replies: [obj]
-                };
+        const id = this.props.router.params.id;
+        const url = `/chats/treebanks/${id}/`;
 
-            } else {
-                tree = {
-                    replies: []
-                }
-            }
-
-            let node = tree;
-            let path = [];
-            while (true) {
-                if (node.replies.length === 0) {
-                    break;
-                }
-
-                let parent = node;
-                node = node.replies[0];
-                path.push(new PathItem(0, path.length, node, parent));
-            }
-
+        fetchTree(url).then(result => {
             this.setState({
-                chatTree: tree,
-                treePath: path
+                chatTree: result.tree,
+                treePath: result.path
             });
         });
     }
@@ -298,15 +199,19 @@ class ActiveChat extends React.Component {
 
         promise.then(message => {
             this.setState(prevState => {
-                let res = getAppendedTree(
-                    prevState.chatTree, prevState.treePath, message.text, message.id
+                let res = addMessage(
+                    prevState.chatTree, prevState.treePath, leafId, message
                 );
+
+                console.log("submit data")
+                console.log(res.tree)
+                console.log(res.thread)
 
                 return {
                     inProgress: true,
                     completion: "",
                     chatTree: res.tree,
-                    treePath: res.path
+                    treePath: res.thread
                 }
             }, this.generateData);
         });
@@ -343,11 +248,12 @@ class ActiveChat extends React.Component {
         let self = this;
 
         this.setState(prevState => {
-            let prefix = prevState.treePath.slice(0, pathItem.prefixLength);
+            let node = getNodeById(prevState.chatTree, pathItem.nodeId);
+            let prefix = collapseThread(prevState.treePath, node.parent.id);
             return {
                 inProgress: true,
                 completion: "",
-                treePath: [...prefix],
+                treePath: prefix,
                 contextLoaded: false
             }
         }, function() {
@@ -374,13 +280,14 @@ class ActiveChat extends React.Component {
 
         const handleDone = () => {
             console.log(`handleDone called ${this.state.completion}`);
+            console.log(generatedText);
 
             let promise = this.postText(generatedText, leaf.id);
 
             promise.then(message => {
                 this.setState(prevState => {
-                    let res = getAppendedTree(
-                        prevState.chatTree, prevState.treePath, message.text, message.id
+                    let res = addMessage(
+                        prevState.chatTree, prevState.treePath, leaf.id, message
                     );
 
                     return {
@@ -389,7 +296,7 @@ class ActiveChat extends React.Component {
                         inProgress: false,
                         chatTree: res.tree,
                         contextLoaded: true,
-                        treePath: res.path
+                        treePath: res.thread
                     }
                 });
             });
@@ -416,34 +323,23 @@ class ActiveChat extends React.Component {
         streamJsonResponse('/chats/generate_reply/', 'POST', body, handleChunk, handleDone);
     }
 
-    handleBranchSwitch(pathItem, newBranchId) {
-        console.log("handle branch switch", pathItem, newBranchId);
+    handleBranchSwitch(message, newBranchId) {
+        console.log("handle branch switch", message, newBranchId);
 
-        if (newBranchId < 0 || newBranchId >= pathItem.parent.replies.length) {
+        if (newBranchId < 0 || newBranchId >= message.numSiblings) {
             throw Exception(`Out of bounds: ${newBranchId}`);
         }
 
-        let treeCopy = JSON.parse(JSON.stringify(this.state.chatTree));
-        let pathCopy = copyTreePath(treeCopy, this.state.treePath);
-    
-        let path = pathCopy.slice(0, pathItem.prefixLength);
+        let node = getNodeById(this.state.chatTree, message.id);
 
-        let lastItem = path[path.length - 1];
-        let node = lastItem.node.replies[newBranchId];
-
-        path.push(new PathItem(newBranchId, path.length, node, lastItem.node));
-
-        while (true) {
-            if (node.replies.length === 0) {
-                break;
-            }
-            let parent = node;
-            node = node.replies[0];
-            path.push(new PathItem(0, path.length, node, parent));
-        }
+        let newId = node.parent.replies[newBranchId].id;
+        console.log('found node');
+        console.log(node);
+        let path = selectThread(this.state.chatTree, newId);
+        console.log(path);
+        console.log(this.state.treePath);
 
         this.setState({
-            chatTree: treeCopy,
             treePath: path,
             contextLoaded: false
         })
