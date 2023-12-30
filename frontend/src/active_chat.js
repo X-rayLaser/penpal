@@ -277,6 +277,8 @@ class ActiveChat extends React.Component {
         };
 
         let leaf = traverseTree(this.state.chatTree, this.state.treePath);
+        console.log("in generate, leaf:")
+        console.log(leaf);
 
         const handleDone = () => {
             console.log(`handleDone called ${this.state.completion}`);
@@ -307,7 +309,7 @@ class ActiveChat extends React.Component {
 
         if (this.state.contextLoaded) {
             body = {
-                prompt: leaf.text + "\n"
+                prompt: leaf.data.text + "\n"
             };
         } else {
             let conversation = getConversationText(

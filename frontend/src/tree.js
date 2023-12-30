@@ -248,7 +248,7 @@ export function getConversationText(tree, thread, questionTemplate, answerTempla
     let result = "";
     messages.forEach((msg, index) => {
         let template = isHumanText(index) ? questionTemplate : answerTemplate;
-        result += template.render(msg.text);
+        result += template.render(msg.data.text);
     });
 
     return result;

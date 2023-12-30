@@ -15,11 +15,12 @@ class LLMManager:
         self.process = None
         self.printing_thread = None
 
-    def setup(self, exec_path, model_path, host, port):
+    def setup(self, exec_path, model_path, host, port, num_gpu_layers=0):
         self.executable_path = exec_path
         self.model_path = model_path
         self.host = host
         self.port = str(port)
+        self.num_gpu_layers = str(num_gpu_layers)
 
     def generate(self, data, content_type):
         if self.process is None:
@@ -46,6 +47,7 @@ class LLMManager:
         popen_args = [
             self.executable_path,
             "-m", self.model_path,
+            "-ngl", self.num_gpu_layers,
             "--host", self.host,
             "--port", self.port
         ]
@@ -140,12 +142,14 @@ if __name__ == '__main__':
     parser.add_argument("model", type=str)
     parser.add_argument("--host", type=str, default="0.0.0.0")
     parser.add_argument("--port", type=int, default=9000)
+    parser.add_argument("--ngl", type=int, default=0)
     args = parser.parse_args()
 
     llm_manager.setup(exec_path="./llama.cpp/server",
                       model_path=args.model,
                       host="localhost",
-                      port=9500)
+                      port=9500,
+                      num_gpu_layers=args.ngl)
 
     server = HTTPServer((args.host, args.port), HttpHandler)
     server.serve_forever()

@@ -17,7 +17,7 @@ def generate_completion(request):
         clear_context = body.get("clear_context", False)
 
         if prompt:
-            print("about to start streaming")
+            print("about to start streaming. Prompt:", prompt)
             response = StreamingHttpResponse(llm_utils.stream_tokens(prompt, clear_context))
             return response
         return HttpResponseBadRequest("Expected 'prompt' field in json request body")
