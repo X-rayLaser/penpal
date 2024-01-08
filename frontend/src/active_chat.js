@@ -1,6 +1,8 @@
 import React from 'react';
 import Form from 'react-bootstrap/Form';
-import InputGroup from 'react-bootstrap/InputGroup';
+import Col from 'react-bootstrap/Col';
+import Row from 'react-bootstrap/Row';
+import Accordion from 'react-bootstrap/Accordion';
 import Button from 'react-bootstrap/Button';
 import Spinner from 'react-bootstrap/Spinner';
 import Card from 'react-bootstrap/Card';
@@ -148,7 +150,7 @@ const INSTRUCTION_MODE = "Instruction mode";
 
 function ModeSelectionForm(props) {
     return (
-        <Form>
+        <Form className="mt-2">
             <Form.Check defaultChecked inline type='radio' value={RAW_MODE} name="mode" id="raw_mode_id" 
                 label={RAW_MODE} onChange={props.onRawMode} />
             <Form.Check inline type='radio' value={CHAT_MODE} name="mode" id="chat_mode_id" 
@@ -156,6 +158,57 @@ function ModeSelectionForm(props) {
             <Form.Check inline type='radio' value={INSTRUCTION_MODE} name="mode" id="instruction_mode_id" 
                 label={INSTRUCTION_MODE} onChange={props.onInstructionMode} />
         </Form>
+    );
+}
+
+
+function SliderWithInput(props) {
+    return (
+        <div>
+            <Form.Label>{props.label}</Form.Label>
+            <Row>
+                <Col xs={10}>
+                    <Form.Range min={props.min} max={props.max} step={props.step}
+                                value={props.value} onChange={props.onChange} />
+                </Col>
+                <Col>
+                    <Form.Control type="number" min={props.min} max={props.max} step={props.step}
+                                  value={props.value} onChange={props.onChange} />
+                </Col>
+            </Row>
+        </div>
+    );
+}
+
+
+function LLMSettingsWidget(props) {
+    return (
+        <div className="mt-2">
+            <Accordion>
+                <Accordion.Item eventKey="0">
+                    <Accordion.Header>LLM settings</Accordion.Header>
+                    <Accordion.Body>
+                        <SliderWithInput label="Temperature" min="0" max="100" step="0.01" 
+                                         value={props.temperature} onChange={props.onTemperatureChange} />
+
+                        <SliderWithInput label="Top K" min="1" max="1000" step="1" 
+                                         value={props.topK} onChange={props.onTopKChange} />
+
+                        <SliderWithInput label="Top P" min="0" max="1" step="0.01" 
+                                         value={props.topP} onChange={props.onTopPChange} />
+
+                        <SliderWithInput label="Min P" min="0" max="1" step="0.01" 
+                                         value={props.minP} onChange={props.onMinPChange} />
+
+                        <SliderWithInput label="Repeatition penalty" min="0" max="100" step="0.01" 
+                                         value={props.repeatPenalty} onChange={props.onRepeatPenaltyChange} />
+
+                        <SliderWithInput label="Maximum # of tokens" min="1" max="32000" step="1" 
+                                         value={props.nPredict} onChange={props.onMaxTokensChange} />
+                    </Accordion.Body>
+                </Accordion.Item>
+            </Accordion>
+        </div>
     );
 }
 
@@ -173,7 +226,15 @@ class ActiveChat extends React.Component {
             completion: "",
             inProgress: false,
             contextLoaded: false,
-            mode: RAW_MODE
+            mode: RAW_MODE,
+            
+            //llm settings
+            temperature: 0.8,
+            top_k: 40,
+            top_p: 0.95,
+            min_p: 0.05,
+            repeat_penalty: 1.1,
+            n_predict: 1024,
         };
 
         this.handleInput = this.handleInput.bind(this);
@@ -183,9 +244,15 @@ class ActiveChat extends React.Component {
         this.handleRegenerate = this.handleRegenerate.bind(this);
 
         this.handleRawModeSwitch = this.handleRawModeSwitch.bind(this);
-
         this.handleChatModeSwitch = this.handleChatModeSwitch.bind(this);
         this.handleInstructionModeSwitch = this.handleInstructionModeSwitch.bind(this);
+
+        this.handleTemperatureChange = this.handleTemperatureChange.bind(this);
+        this.handleTopKChange = this.handleTopKChange.bind(this);
+        this.handleTopPChange = this.handleTopPChange.bind(this);
+        this.handleMinPChange = this.handleMinPChange.bind(this);
+        this.handleMaxTokensChange = this.handleMaxTokensChange.bind(this);
+        this.handleRepeatPenaltyChange = this.handleRepeatPenaltyChange.bind(this);
     }
 
     componentDidMount() {
@@ -382,7 +449,15 @@ class ActiveChat extends React.Component {
 
         return {
             prompt: conversation + "",
-            clear_context: true
+            clear_context: true,
+            llm_settings: {
+                temperature: this.state.temperature,
+                top_k: this.state.top_k,
+                top_p: this.state.top_p,
+                min_p: this.state.min_p,
+                n_predict: this.state.n_predict,
+                repeat_penalty: this.state.repeat_penalty
+            }
         };
     }
 
@@ -424,6 +499,30 @@ class ActiveChat extends React.Component {
         this.setState({ "mode": INSTRUCTION_MODE });
     }
 
+    handleTemperatureChange(e) {
+        this.setState({ "temperature": e.target.value });
+    }
+
+    handleTopKChange(e) {
+        this.setState({ "top_k": e.target.value });
+    }
+
+    handleTopPChange(e) {
+        this.setState({ "top_p": e.target.value });
+    }
+
+    handleMinPChange(e) {
+        this.setState({ "min_p": e.target.value });
+    }
+
+    handleMaxTokensChange(e) {
+        this.setState({ "n_predict": e.target.value });
+    }
+
+    handleRepeatPenaltyChange(e) {
+        this.setState({ "repeat_penalty": e.target.value });
+    }
+
     render() {
         let textarea = (
             <Form.Control as="textarea" rows={10} placeholder="Enter a prompt here"
@@ -436,11 +535,27 @@ class ActiveChat extends React.Component {
                         onChatMode={this.handleChatModeSwitch}
                         onInstructionMode={this.handleInstructionModeSwitch} />
         let button;
-        
+
+        let settings = (
+            <LLMSettingsWidget temperature={this.state.temperature}
+                               topK={this.state.top_k}
+                               topP={this.state.top_p}
+                               minP={this.state.min_p}
+                               nPredict={this.state.n_predict}
+                               repeatPenalty={this.state.repeat_penalty}
+                               onTemperatureChange={this.handleTemperatureChange}
+                               onTopKChange={this.handleTopKChange}
+                               onTopPChange={this.handleTopPChange}
+                               onMinPChange={this.handleMinPChange}
+                               onMaxTokensChange={this.handleMaxTokensChange}
+                               onRepeatPenaltyChange={this.handleRepeatPenaltyChange} />
+        );
+
         if (this.hasNoReply()) {
             return (
                 <div>
                     {radio}
+                    {settings}
                     <ConversationTree tree={this.state.chatTree} treePath={this.state.treePath}
                             onBranchSwitch={this.handleBranchSwitch} />
                     <div>It looks like AI did not reply for some reason</div>
@@ -467,6 +582,7 @@ class ActiveChat extends React.Component {
         return (
             <div>
                 {radio}
+                {settings}
                 <ConversationTree tree={this.state.chatTree} treePath={this.state.treePath}
                         onBranchSwitch={this.handleBranchSwitch}
                         onRegenerate={this.handleRegenerate} />

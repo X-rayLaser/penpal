@@ -5,12 +5,12 @@ import random
 
 
 class LLMAdapter:
-    def stream_tokens(self, prompt, clear_context=False):
+    def stream_tokens(self, prompt, clear_context=False, llm_settings=None):
         raise NotImplementedError
 
 
 class DummyAdapter(LLMAdapter):
-    def stream_tokens(self, prompt, clear_context=False):
+    def stream_tokens(self, prompt, clear_context=False, llm_settings=None):
         words = ["likes", "words", "and", "everyone", "playing", "with"]
 
         for i in range(10):
@@ -22,7 +22,7 @@ class DummyAdapter(LLMAdapter):
 
 
 class DummyMarkdownAdapter(LLMAdapter):
-    def stream_tokens(self, prompt, clear_context=False):
+    def stream_tokens(self, prompt, clear_context=False, llm_settings=None):
         tokens = ["Of", " ", "course", ".", " ", "Here" " ", "is", " ", "the", " ", "code", ":", "\n", 
                   "``", "`", "python", "\n", "for", " ", "i", " in", " ", "range", "(", "5", ")", 
                   ":", "\n", "    ", "print", "(", "'", "hello", " ", "world", "'", ")", "\n", "```"]
@@ -36,7 +36,9 @@ class RemoteLLMAdapter(LLMAdapter):
         self.host = host
         self.port = port
 
-    def stream_tokens(self, prompt, clear_context=False):
+    def stream_tokens(self, prompt, clear_context=False, llm_settings=None):
+        llm_settings = llm_settings or {}
+
         if clear_context:
             url = f"http://{self.host}:{self.port}/clear-context"
             resp = requests.post(url)
@@ -44,7 +46,8 @@ class RemoteLLMAdapter(LLMAdapter):
                 raise ClearContextError("Failed to clear context")
 
         url = f"http://{self.host}:{self.port}/completion"
-        payload = {"prompt": prompt, "n_predict": 512, "stream": True}
+        payload = {"prompt": prompt, "stream": True}
+        payload.update(llm_settings)
 
         headers = {'Content-Type': 'application/json'}
         resp = requests.post(url, data=json.dumps(payload), headers=headers, stream=True)

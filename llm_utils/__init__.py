@@ -14,8 +14,9 @@ cls = getattr(importlib.import_module(module_path), adapter_class)
 adapter = cls(**adapter_kwargs)
 
 
-def stream_tokens(prompt, clear_context=False, **settings):
-    for token in adapter.stream_tokens(prompt, clear_context=clear_context, **settings):
+def stream_tokens(prompt, clear_context=False, llm_settings=None, **settings):
+    for token in adapter.stream_tokens(prompt, clear_context=clear_context, 
+                                       llm_settings=llm_settings, **settings):
         yield token
 
 
