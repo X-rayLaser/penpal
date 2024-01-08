@@ -44,7 +44,7 @@ class RemoteLLMAdapter(LLMAdapter):
                 raise ClearContextError("Failed to clear context")
 
         url = f"http://{self.host}:{self.port}/completion"
-        payload = {"prompt": prompt, "n_predict": 256, "stream": True}
+        payload = {"prompt": prompt, "n_predict": 512, "stream": True}
 
         headers = {'Content-Type': 'application/json'}
         resp = requests.post(url, data=json.dumps(payload), headers=headers, stream=True)

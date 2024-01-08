@@ -1,5 +1,6 @@
 import React from 'react';
 import Form from 'react-bootstrap/Form';
+import InputGroup from 'react-bootstrap/InputGroup';
 import Button from 'react-bootstrap/Button';
 import Spinner from 'react-bootstrap/Spinner';
 import Card from 'react-bootstrap/Card';
@@ -87,10 +88,10 @@ function Message(props) {
     };
     
     return (        
-        <Card bg={props.bg} text={props.color} className="mb-3">
+        <Card bg={props.bg} text={props.color} className="mb-3" style={{color:'red'}}>
             <Card.Header>{props.header}</Card.Header>
             <Card.Body>
-                <pre dangerouslySetInnerHTML={innerHtml} />
+                <pre dangerouslySetInnerHTML={innerHtml} style={{whiteSpace: 'break-spaces'}} />
             </Card.Body>
             <Card.Footer>
                 <div>
@@ -140,6 +141,25 @@ function ReplyInProgress(props) {
 };
 
 
+const RAW_MODE = "Raw mode";
+const CHAT_MODE = "Chat mode";
+const INSTRUCTION_MODE = "Instruction mode";
+
+
+function ModeSelectionForm(props) {
+    return (
+        <Form>
+            <Form.Check defaultChecked inline type='radio' value={RAW_MODE} name="mode" id="raw_mode_id" 
+                label={RAW_MODE} onChange={props.onRawMode} />
+            <Form.Check inline type='radio' value={CHAT_MODE} name="mode" id="chat_mode_id" 
+                label={CHAT_MODE} onChange={props.onChatMode} />
+            <Form.Check inline type='radio' value={INSTRUCTION_MODE} name="mode" id="instruction_mode_id" 
+                label={INSTRUCTION_MODE} onChange={props.onInstructionMode} />
+        </Form>
+    );
+}
+
+
 class ActiveChat extends React.Component {
 
     constructor(props) {
@@ -152,7 +172,8 @@ class ActiveChat extends React.Component {
             treePath: [],
             completion: "",
             inProgress: false,
-            contextLoaded: false
+            contextLoaded: false,
+            mode: RAW_MODE
         };
 
         this.handleInput = this.handleInput.bind(this);
@@ -160,6 +181,11 @@ class ActiveChat extends React.Component {
         this.handleGenerate = this.handleGenerate.bind(this);
         this.handleBranchSwitch = this.handleBranchSwitch.bind(this);
         this.handleRegenerate = this.handleRegenerate.bind(this);
+
+        this.handleRawModeSwitch = this.handleRawModeSwitch.bind(this);
+
+        this.handleChatModeSwitch = this.handleChatModeSwitch.bind(this);
+        this.handleInstructionModeSwitch = this.handleInstructionModeSwitch.bind(this);
     }
 
     componentDidMount() {
@@ -303,26 +329,61 @@ class ActiveChat extends React.Component {
                 });
             });
         }
-        let body;
-        let questionTemplate = new TextTemplate("%message\n");
-        let answerTemplate = new TextTemplate("%message\n");
+        //let body = this.prepareRequestBody(leaf);
+        let body = this.prepareRequestBodyWithRecreatedConversation();
 
+        console.log("full prompt:")
+        console.log(body.prompt);
+
+        streamJsonResponse('/chats/generate_reply/', 'POST', body, handleChunk, handleDone);
+    }
+
+    prepareRequestBody(leaf) {
         if (this.state.contextLoaded) {
-            body = {
+            return {
                 prompt: leaf.data.text + "\n"
             };
         } else {
-            let conversation = getConversationText(
-                this.state.chatTree, this.state.treePath, questionTemplate, answerTemplate
-            );
+            return this.prepareRequestBodyWithRecreatedConversation();
+        }
+    }
 
-            body = {
-                prompt: conversation + "",
-                clear_context: true
-            };
+    prepareRequestBodyWithRecreatedConversation() {
+        let questionTemplateText;
+        let answerTemplateText;
+
+        if (this.state.mode === RAW_MODE) {
+            questionTemplateText = "%message ";
+            answerTemplateText = questionTemplateText;
+        } else if (this.state.mode === CHAT_MODE) {
+            questionTemplateText = "<human>%message</human>";
+            answerTemplateText = "<bot>%message</bot>"
+        } else if (this.state.mode === INSTRUCTION_MODE) {
+            questionTemplateText = "[INST]%message[/INST]";
+            answerTemplateText = "%message";
+        } else {
+            console.error(`Unknown mode ${this.state.mode}`);
+            throw `Unknown mode ${this.state.mode}`;
+        }
+        let questionTemplate = new TextTemplate(questionTemplateText);
+        let answerTemplate = new TextTemplate(answerTemplateText);
+
+        let conversation = getConversationText(
+            this.state.chatTree, this.state.treePath, questionTemplate, answerTemplate
+        );
+
+        if (this.state.mode === INSTRUCTION_MODE) {
+            conversation = "<s>" + conversation;
         }
 
-        streamJsonResponse('/chats/generate_reply/', 'POST', body, handleChunk, handleDone);
+        if (this.state.mode === CHAT_MODE) {
+            conversation += "<bot>";
+        }
+
+        return {
+            prompt: conversation + "",
+            clear_context: true
+        };
     }
 
     handleBranchSwitch(message, newBranchId) {
@@ -347,13 +408,39 @@ class ActiveChat extends React.Component {
         })
     }
 
+    hasNoReply() {
+        return this.state.treePath.length % 2 === 1 && !this.state.inProgress;
+    }
+
+    handleRawModeSwitch(e) {
+        this.setState({ "mode": RAW_MODE });
+    }
+
+    handleChatModeSwitch(e) {
+        this.setState({ "mode": CHAT_MODE });
+    }
+
+    handleInstructionModeSwitch(e) {
+        this.setState({ "mode": INSTRUCTION_MODE });
+    }
+
     render() {
-        let textarea;
+        let textarea = (
+            <Form.Control as="textarea" rows={10} placeholder="Enter a prompt here"
+                          onInput={this.handleInput}
+                          value={this.state.prompt}
+                          disabled={this.state.inProgress} />
+        );
+        let radio = <ModeSelectionForm 
+                        onRawMode={this.handleRawModeSwitch}
+                        onChatMode={this.handleChatModeSwitch}
+                        onInstructionMode={this.handleInstructionModeSwitch} />
         let button;
         
-        if (this.state.treePath.length % 2 === 1 && !this.state.inProgress) {
+        if (this.hasNoReply()) {
             return (
                 <div>
+                    {radio}
                     <ConversationTree tree={this.state.chatTree} treePath={this.state.treePath}
                             onBranchSwitch={this.handleBranchSwitch} />
                     <div>It looks like AI did not reply for some reason</div>
@@ -363,12 +450,7 @@ class ActiveChat extends React.Component {
             );
         }
 
-        if (this.state.inProgress) {
-            textarea = (<Form.Control as="textarea" rows={10} placeholder="Enter a prompt here"
-                onInput={this.handleInput}
-                value={this.state.prompt}
-                disabled />);
-            
+        if (this.state.inProgress) {            
             button = <Button variant="primary" type="submit" disabled>
                 <Spinner
                     as="span"
@@ -379,15 +461,12 @@ class ActiveChat extends React.Component {
                 />
                 <span>  Generating</span>
             </Button>;
-        } else {
-            textarea = (<Form.Control as="textarea" rows={10} placeholder="Enter a prompt here"
-                onInput={this.handleInput}
-                value={this.state.prompt} />);
-            
+        } else {            
             button = <Button variant="primary" type="submit">Generate completion</Button>;
         }
         return (
             <div>
+                {radio}
                 <ConversationTree tree={this.state.chatTree} treePath={this.state.treePath}
                         onBranchSwitch={this.handleBranchSwitch}
                         onRegenerate={this.handleRegenerate} />
