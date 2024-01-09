@@ -11,16 +11,18 @@ class LLMManager:
         self.model_path = ""
         self.host = ""
         self.port = ""
+        self.context_size = ""
 
         self.process = None
         self.printing_thread = None
 
-    def setup(self, exec_path, model_path, host, port, num_gpu_layers=0):
+    def setup(self, exec_path, model_path, host, port, num_gpu_layers=0, context_size=512):
         self.executable_path = exec_path
         self.model_path = model_path
         self.host = host
         self.port = str(port)
         self.num_gpu_layers = str(num_gpu_layers)
+        self.context_size = str(context_size)
 
     def generate(self, data, content_type):
         if self.process is None:
@@ -47,6 +49,7 @@ class LLMManager:
         popen_args = [
             self.executable_path,
             "-m", self.model_path,
+            "-c", self.context_size,
             "-ngl", self.num_gpu_layers,
             "--host", self.host,
             "--port", self.port
@@ -143,6 +146,7 @@ if __name__ == '__main__':
     parser.add_argument("--host", type=str, default="0.0.0.0")
     parser.add_argument("--port", type=int, default=9000)
     parser.add_argument("--ngl", type=int, default=0)
+    parser.add_argument("-c", type=int, default=1024, help="Context size of the model")
     args = parser.parse_args()
 
     llm_manager.setup(exec_path="./llama.cpp/server",

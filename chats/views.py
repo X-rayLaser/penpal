@@ -2,11 +2,17 @@ import json
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from .models import Chat, Message
-from .serializers import ChatSerializer, MessageSerializer, TreebankSerializer
+from rest_framework import viewsets
+from .models import SystemMessage, Chat, Message
+from .serializers import ChatSerializer, MessageSerializer, TreebankSerializer, SystemMessageSerializer
 import llm_utils
 from django.http.response import StreamingHttpResponse, HttpResponseNotAllowed, HttpResponseBadRequest
 from django.views.decorators.csrf import csrf_exempt
+
+
+class SystemMessageViewSet(viewsets.ModelViewSet):
+    serializer_class = SystemMessageSerializer
+    queryset = SystemMessage.objects.all()
 
 
 @csrf_exempt

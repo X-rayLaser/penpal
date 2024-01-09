@@ -1,13 +1,27 @@
 from rest_framework import serializers
-from .models import Chat, Message
+from .models import SystemMessage, Chat, Message
 import markdown
+
+
+class SystemMessageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SystemMessage
+        fields = ['id', 'name', 'text']
 
 
 class ChatSerializer(serializers.ModelSerializer):
     prompt_text = serializers.ReadOnlyField(source='prompt.text', default="**No data yet**")
+
+    system_message_ro = SystemMessageSerializer(read_only=True)
+
     class Meta:
         model = Chat
-        fields = ['id', 'prompt_text', 'human']
+        fields = ['id', 'system_message', 'system_message_ro', 'prompt_text', 'human']
+
+    def update(self, instance, validated_data):
+        # todo: consider other approaches
+        validated_data.pop('system_message')
+        return super().update(instance, validated_data)
 
 
 class MessageSerializer(serializers.ModelSerializer):

@@ -12,6 +12,8 @@ import { ChatsList } from "./chats";
 import { ActiveChat } from './active_chat';
 import { ErrorPage } from './errors';
 import { TextCompletionPage } from './text_completion';
+import { SystemMessageList } from './system_messages';
+
 
 class App extends React.Component {
     render() {
@@ -19,6 +21,7 @@ class App extends React.Component {
             <Container>
                 <div>
                     <Link to={"my-chats"}>My chats</Link>
+                    <Link to={"my-system-messages"}>My system messages</Link>
                     <Link to={"completion"}>Text completion</Link>
                 </div>
                 <div id="detail">
@@ -47,11 +50,14 @@ const router = createHashRouter([
             {
                 path: "/chats/:id/",
                 element: <ActiveChat />
-            }
+            },
+            {
+                path: "/my-system-messages/",
+                element: <SystemMessageList />
+            },
         ]
     }
 ]);
-
 
 // Render your React component instead
 const root = createRoot(document.getElementById('react_app'));

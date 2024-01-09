@@ -2,7 +2,19 @@ from django.db import models
 from django.contrib.auth.models import User
 
 
+class SystemMessage(models.Model):
+    name = models.CharField(max_length=50)
+    text = models.CharField(max_length=4096)
+
+    created_time = models.DateTimeField(auto_now_add=True, blank=True)
+
+    def __str__(self):
+        return self.name
+
+
 class Chat(models.Model):
+    system_message = models.OneToOneField(SystemMessage, related_name='chat', 
+                                          blank=True, null=True, on_delete=models.SET_NULL)
     prompt = models.OneToOneField('Message', related_name='chat', on_delete=models.SET_NULL,
                                   blank=True, null=True)
     human = models.ForeignKey(User, related_name='chats', blank=True, null=True,
