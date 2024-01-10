@@ -12,7 +12,7 @@ class SystemMessageSerializer(serializers.ModelSerializer):
 class ChatSerializer(serializers.ModelSerializer):
     prompt_text = serializers.ReadOnlyField(source='prompt.text', default="**No data yet**")
 
-    system_message_ro = SystemMessageSerializer(read_only=True)
+    system_message_ro = SystemMessageSerializer(source="system_message", read_only=True)
 
     class Meta:
         model = Chat

@@ -110,7 +110,7 @@ class ChatsList extends React.Component {
 
         if (this.state.system_messages.length > 0) {
             messages = this.state.system_messages.map((message, index) =>
-                <option value={message.name}>{message.name}</option>
+                <option key={index} value={message.name}>{message.name}</option>
             );
         } else {
             messages = [];

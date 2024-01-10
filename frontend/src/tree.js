@@ -243,15 +243,31 @@ export function getThreadMessages(tree, thread) {
     return res;
 }
 
-export function getConversationText(tree, thread, questionTemplate, answerTemplate) {
+export function getConversationText(tree, thread, questionTemplate, answerTemplate, systemMessage) {
     let messages = getThreadMessages(tree, thread);
     let result = "";
+
+    messages = includeSystemMessage(messages, systemMessage);
+
     messages.forEach((msg, index) => {
         let template = isHumanText(index) ? questionTemplate : answerTemplate;
         result += template.render(msg.data.text);
     });
 
     return result;
+}
+
+function includeSystemMessage(messages, systemMessage, separator) {
+    //prepends text of the first message in messages array with systemMessage
+    let res = copyObject(messages);
+
+    separator = separator || "\n\n";
+
+    if (systemMessage && res.length > 0) {
+        res[0].data.text = systemMessage + separator + res[0].data.text;
+    }
+
+    return res;
 }
 
 export function isHumanText(index) {

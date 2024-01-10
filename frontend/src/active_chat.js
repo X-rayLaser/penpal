@@ -213,12 +213,28 @@ function LLMSettingsWidget(props) {
 }
 
 
+function CollapsibleSystemMessage(props) {
+    let sysMessage = (props.systemMessage && props.systemMessage.text) || "";
+    return (
+        <div>
+            <Accordion>
+                <Accordion.Item eventKey="0">
+                    <Accordion.Header>System Message</Accordion.Header>
+                    <Accordion.Body>{sysMessage}</Accordion.Body>
+                </Accordion.Item>
+            </Accordion>
+        </div>
+    );
+}
+
+
 class ActiveChat extends React.Component {
 
     constructor(props) {
         super(props);
         this.state = {
             prompt: "",
+            system_message: null,
             chatTree: {
                 children: []
             },
@@ -257,13 +273,24 @@ class ActiveChat extends React.Component {
 
     componentDidMount() {
         const id = this.props.router.params.id;
-        const url = `/chats/treebanks/${id}/`;
+        const treeBankUrl = `/chats/treebanks/${id}/`;
+        const chatUrl = `/chats/chats/${id}/`;
 
-        fetchTree(url).then(result => {
+        fetchTree(treeBankUrl).then(result => {
             this.setState({
                 chatTree: result.tree,
                 treePath: result.path
             });
+        });
+
+        fetch(chatUrl, {
+            headers: {
+                "Accept": "application/json"
+            }
+        }).then(response => response.json()).then(data => {
+            this.setState({ system_message: data.system_message_ro });
+            
+            console.log(data);
         });
     }
 
@@ -399,7 +426,8 @@ class ActiveChat extends React.Component {
         //let body = this.prepareRequestBody(leaf);
         let body = this.prepareRequestBodyWithRecreatedConversation();
 
-        console.log("full prompt:")
+        console.log(`sys message: ${this.state.system_message}`)
+        console.log("full prompt!!!:")
         console.log(body.prompt);
 
         streamJsonResponse('/chats/generate_reply/', 'POST', body, handleChunk, handleDone);
@@ -435,8 +463,10 @@ class ActiveChat extends React.Component {
         let questionTemplate = new TextTemplate(questionTemplateText);
         let answerTemplate = new TextTemplate(answerTemplateText);
 
+        let sysMessageText = this.state.system_message && this.state.system_message.text;
         let conversation = getConversationText(
-            this.state.chatTree, this.state.treePath, questionTemplate, answerTemplate
+            this.state.chatTree, this.state.treePath,
+            questionTemplate, answerTemplate, sysMessageText
         );
 
         if (this.state.mode === INSTRUCTION_MODE) {
@@ -448,7 +478,7 @@ class ActiveChat extends React.Component {
         }
 
         return {
-            prompt: conversation + "",
+            prompt: conversation,
             clear_context: true,
             llm_settings: {
                 temperature: this.state.temperature,
@@ -551,11 +581,14 @@ class ActiveChat extends React.Component {
                                onRepeatPenaltyChange={this.handleRepeatPenaltyChange} />
         );
 
+        let systemMessageWidget = <CollapsibleSystemMessage systemMessage={this.state.system_message} />
+
         if (this.hasNoReply()) {
             return (
                 <div>
                     {radio}
                     {settings}
+                    {this.state.system_message && systemMessageWidget}
                     <ConversationTree tree={this.state.chatTree} treePath={this.state.treePath}
                             onBranchSwitch={this.handleBranchSwitch} />
                     <div>It looks like AI did not reply for some reason</div>
@@ -583,6 +616,7 @@ class ActiveChat extends React.Component {
             <div>
                 {radio}
                 {settings}
+                {this.state.system_message && systemMessageWidget}
                 <ConversationTree tree={this.state.chatTree} treePath={this.state.treePath}
                         onBranchSwitch={this.handleBranchSwitch}
                         onRegenerate={this.handleRegenerate} />
