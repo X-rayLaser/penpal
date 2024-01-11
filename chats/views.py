@@ -3,11 +3,12 @@ from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import viewsets
+from django.http.response import StreamingHttpResponse, HttpResponseNotAllowed, HttpResponseBadRequest
+from django.views.decorators.csrf import csrf_exempt
 from .models import SystemMessage, Chat, Message
 from .serializers import ChatSerializer, MessageSerializer, TreebankSerializer, SystemMessageSerializer
 import llm_utils
-from django.http.response import StreamingHttpResponse, HttpResponseNotAllowed, HttpResponseBadRequest
-from django.views.decorators.csrf import csrf_exempt
+from plugins import llm_tools
 
 
 class SystemMessageViewSet(viewsets.ModelViewSet):
@@ -121,3 +122,24 @@ def message_detail(request, pk):
     if request.method == 'DELETE':
         message.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(['GET'])
+def call_api(request):
+    tool = request.query_params.get('tool')
+    arg_string = request.query_params.get('arg_string')
+    print('tool', tool, 'arg string', arg_string)
+    args = arg_string.split(",")
+    args = [arg.strip().lower() for arg in args]
+
+    func = llm_tools.get(tool)
+    if not func:
+        Response({tool: 'This tool does not exist'}, status=400)
+    
+    print('tool', tool, 'args', args)
+    try:
+        result = func(*args)
+        data = dict(result=result)
+        return Response(data, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({ tool: f'Invalid tool use: {repr(e)}' }, status=status.HTTP_400_BAD_REQUEST)

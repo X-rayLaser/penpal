@@ -8,7 +8,7 @@ import Spinner from 'react-bootstrap/Spinner';
 import Card from 'react-bootstrap/Card';
 import Pagination from 'react-bootstrap/Pagination';
 import { streamJsonResponse } from './utils';
-import { withRouter } from "./utils";
+import { withRouter, generateResponse } from "./utils";
 import { 
     fetchTree, addNode, addMessage, selectThread, appendThread, collapseThread,
     getNodeById, getThreadMessages, getConversationText, isHumanText
@@ -384,11 +384,13 @@ class ActiveChat extends React.Component {
     }
 
     generateData() {
-        let generatedText = "";
+        let leaf = traverseTree(this.state.chatTree, this.state.treePath);
+        let committedText = "";
 
-        const handleChunk = chunk => {
-            generatedText = generatedText + chunk;
+        console.log("in NEW GENERATE DATA, leaf:")
+        console.log(leaf);
 
+        const handleChunk = (generatedText, chunk) => {
             this.setState(prevState => {
                 return {
                     completion: prevState.completion + chunk
@@ -396,11 +398,18 @@ class ActiveChat extends React.Component {
             });
         };
 
-        let leaf = traverseTree(this.state.chatTree, this.state.treePath);
-        console.log("in generate, leaf:")
-        console.log(leaf);
+        const handlePause = textSegment => {
+            //get request to the server to calculate something
+            committedText += textSegment;
+
+            this.setState({
+                completion: committedText
+            });
+            return "0";
+        }
 
         const handleDone = () => {
+            let generatedText = this.state.completion;
             console.log(`handleDone called ${this.state.completion}`);
             console.log(generatedText);
 
@@ -423,27 +432,34 @@ class ActiveChat extends React.Component {
                 });
             });
         }
-        //let body = this.prepareRequestBody(leaf);
-        let body = this.prepareRequestBodyWithRecreatedConversation();
+        //let prompt = this.preparePrompt(leaf);
+        let prompt = this.preparePromptWithRecreatedConversation();
 
         console.log(`sys message: ${this.state.system_message}`)
         console.log("full prompt!!!:")
-        console.log(body.prompt);
+        console.log(prompt);
 
-        streamJsonResponse('/chats/generate_reply/', 'POST', body, handleChunk, handleDone);
+        let llmSettings = {
+            temperature: this.state.temperature,
+            top_k: this.state.top_k,
+            top_p: this.state.top_p,
+            min_p: this.state.min_p,
+            n_predict: this.state.n_predict,
+            repeat_penalty: this.state.repeat_penalty
+        };
+
+        generateResponse(prompt, llmSettings, handleChunk, handlePause, handleDone)
     }
 
-    prepareRequestBody(leaf) {
+    preparePrompt(leaf) {
         if (this.state.contextLoaded) {
-            return {
-                prompt: leaf.data.text + "\n"
-            };
+            return leaf.data.text + "\n";
         } else {
-            return this.prepareRequestBodyWithRecreatedConversation();
+            return this.preparePromptWithRecreatedConversation();
         }
     }
 
-    prepareRequestBodyWithRecreatedConversation() {
+    preparePromptWithRecreatedConversation() {
         let questionTemplateText;
         let answerTemplateText;
 
@@ -477,18 +493,7 @@ class ActiveChat extends React.Component {
             conversation += "<bot>";
         }
 
-        return {
-            prompt: conversation,
-            clear_context: true,
-            llm_settings: {
-                temperature: this.state.temperature,
-                top_k: this.state.top_k,
-                top_p: this.state.top_p,
-                min_p: this.state.min_p,
-                n_predict: this.state.n_predict,
-                repeat_penalty: this.state.repeat_penalty
-            }
-        };
+        return conversation;
     }
 
     handleBranchSwitch(message, newBranchId) {

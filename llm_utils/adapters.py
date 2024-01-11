@@ -14,7 +14,7 @@ class DummyAdapter(LLMAdapter):
         words = ["likes", "words", "and", "everyone", "playing", "with"]
 
         for i in range(10):
-            time.sleep(0.5)
+            time.sleep(0.125)
             word = random.choice(words)
             yield word + " "
 
@@ -27,7 +27,19 @@ class DummyMarkdownAdapter(LLMAdapter):
                   "``", "`", "python", "\n", "for", " ", "i", " in", " ", "range", "(", "5", ")", 
                   ":", "\n", "    ", "print", "(", "'", "hello", " ", "world", "'", ")", "\n", "```"]
         for token in tokens:
-            time.sleep(0.25)
+            time.sleep(0.125)
+            yield token
+
+
+class DummyToolUseAdapter(LLMAdapter):
+    def stream_tokens(self, prompt, clear_context=False, llm_settings=None):
+        tokens1 = ["one ", "two ", "three ", "<", "api>", "calculate", 
+                  "(+,", "2,3)", "</api>", " rest", " to be ", "discarded "]
+        tokens2 = ["four", "five", "six"]
+        
+        seq = tokens1 if random.random() > 0.5 else tokens2
+        for token in seq:
+            time.sleep(0.5)
             yield token
 
 
@@ -46,7 +58,9 @@ class RemoteLLMAdapter(LLMAdapter):
                 raise ClearContextError("Failed to clear context")
 
         url = f"http://{self.host}:{self.port}/completion"
-        payload = {"prompt": prompt, "stream": True}
+
+        stop_word = "</api>"
+        payload = {"prompt": prompt, "stream": True, "stop": [stop_word]}
         payload.update(llm_settings)
 
         headers = {'Content-Type': 'application/json'}
@@ -58,7 +72,8 @@ class RemoteLLMAdapter(LLMAdapter):
                 stripped_line = line[6:]
                 print("in Remote adapter!:", line, "stripped line:", stripped_line)
                 entry = json.loads(stripped_line)
-                if entry["stop"]:
+                if entry["stop"] and entry["stopping_word"] == stop_word:
+                    yield stop_word
                     break
                 yield entry["content"]
 
