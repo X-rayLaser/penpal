@@ -13,7 +13,7 @@ import { ActiveChat } from './active_chat';
 import { ErrorPage } from './errors';
 import { TextCompletionPage } from './text_completion';
 import { SystemMessageList } from './system_messages';
-
+import { PresetsPage } from './presets';
 
 class App extends React.Component {
     render() {
@@ -21,6 +21,7 @@ class App extends React.Component {
             <Container>
                 <div>
                     <Link to={"my-chats"}>My chats</Link>
+                    <Link to={"presets"}>LLM presets</Link>
                     <Link to={"my-system-messages"}>My system messages</Link>
                     <Link to={"completion"}>Text completion</Link>
                 </div>
@@ -50,6 +51,10 @@ const router = createHashRouter([
             {
                 path: "/chats/:id/",
                 element: <ActiveChat />
+            },
+            {
+                path: "/presets/",
+                element: <PresetsPage />
             },
             {
                 path: "/my-system-messages/",

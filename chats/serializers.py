@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import SystemMessage, Chat, Message
+from .models import SystemMessage, Preset, Chat, Message
 import markdown
 
 
@@ -7,6 +7,13 @@ class SystemMessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = SystemMessage
         fields = ['id', 'name', 'text']
+
+
+class PresetSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Preset
+        fields = ['id', 'name', 'temperature', 'top_k', 
+                  'top_p', 'min_p', 'repeat_penalty', 'n_predict']
 
 
 class ChatSerializer(serializers.ModelSerializer):

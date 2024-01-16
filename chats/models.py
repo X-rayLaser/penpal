@@ -1,4 +1,5 @@
 from django.db import models
+from django.core.validators import MinValueValidator, MaxValueValidator
 from django.contrib.auth.models import User
 
 
@@ -7,6 +8,37 @@ class SystemMessage(models.Model):
     text = models.CharField(max_length=4096)
 
     created_time = models.DateTimeField(auto_now_add=True, blank=True)
+
+    def __str__(self):
+        return self.name
+
+
+class Preset(models.Model):
+    name = models.CharField(max_length=50, unique=True)
+
+    temperature = models.FloatField(
+        validators=[MinValueValidator(0), MaxValueValidator(100)]
+    )
+
+    top_k = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(1000)]
+    )
+
+    top_p = models.FloatField(
+        validators=[MinValueValidator(0), MaxValueValidator(1)]
+    )
+
+    min_p = models.FloatField(
+        validators=[MinValueValidator(0), MaxValueValidator(1)]
+    )
+
+    repeat_penalty = models.FloatField(
+        validators=[MinValueValidator(0), MaxValueValidator(100)]
+    )
+
+    n_predict = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(4096)]
+    )
 
     def __str__(self):
         return self.name

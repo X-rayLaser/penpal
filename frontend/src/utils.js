@@ -109,7 +109,7 @@ function findPendingApiCall(generatedText) {
         throw new Error(msg);
     }
     str = str.replace("<api>", "").replace("</api>", "");
-    str = str.replace(/=.*/, "")
+    str = str.replace(/=.*/, "");
 
     let name = str.match(/^[a-z_]+/)[0];
     let argString;

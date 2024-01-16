@@ -6,6 +6,7 @@ from . import views
 
 router = routers.DefaultRouter()
 router.register("system_messages", views.SystemMessageViewSet)
+router.register("presets", views.PresetViewSet)
 
 urlpatterns = [
     path('generate_reply/', views.generate_reply),

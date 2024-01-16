@@ -13,6 +13,7 @@ import {
     fetchTree, addNode, addMessage, selectThread, appendThread, collapseThread,
     getNodeById, getThreadMessages, getConversationText, isHumanText
 } from './tree';
+import { CollapsibleLLMSettings } from './presets';
 
 
 class TextTemplate {
@@ -158,57 +159,6 @@ function ModeSelectionForm(props) {
             <Form.Check inline type='radio' value={INSTRUCTION_MODE} name="mode" id="instruction_mode_id" 
                 label={INSTRUCTION_MODE} onChange={props.onInstructionMode} />
         </Form>
-    );
-}
-
-
-function SliderWithInput(props) {
-    return (
-        <div>
-            <Form.Label>{props.label}</Form.Label>
-            <Row>
-                <Col xs={10}>
-                    <Form.Range min={props.min} max={props.max} step={props.step}
-                                value={props.value} onChange={props.onChange} />
-                </Col>
-                <Col>
-                    <Form.Control type="number" min={props.min} max={props.max} step={props.step}
-                                  value={props.value} onChange={props.onChange} />
-                </Col>
-            </Row>
-        </div>
-    );
-}
-
-
-function LLMSettingsWidget(props) {
-    return (
-        <div className="mt-2">
-            <Accordion>
-                <Accordion.Item eventKey="0">
-                    <Accordion.Header>LLM settings</Accordion.Header>
-                    <Accordion.Body>
-                        <SliderWithInput label="Temperature" min="0" max="100" step="0.01" 
-                                         value={props.temperature} onChange={props.onTemperatureChange} />
-
-                        <SliderWithInput label="Top K" min="1" max="1000" step="1" 
-                                         value={props.topK} onChange={props.onTopKChange} />
-
-                        <SliderWithInput label="Top P" min="0" max="1" step="0.01" 
-                                         value={props.topP} onChange={props.onTopPChange} />
-
-                        <SliderWithInput label="Min P" min="0" max="1" step="0.01" 
-                                         value={props.minP} onChange={props.onMinPChange} />
-
-                        <SliderWithInput label="Repeatition penalty" min="0" max="100" step="0.01" 
-                                         value={props.repeatPenalty} onChange={props.onRepeatPenaltyChange} />
-
-                        <SliderWithInput label="Maximum # of tokens" min="1" max="32000" step="1" 
-                                         value={props.nPredict} onChange={props.onMaxTokensChange} />
-                    </Accordion.Body>
-                </Accordion.Item>
-            </Accordion>
-        </div>
     );
 }
 
@@ -571,19 +521,26 @@ class ActiveChat extends React.Component {
                         onInstructionMode={this.handleInstructionModeSwitch} />
         let button;
 
-        let settings = (
-            <LLMSettingsWidget temperature={this.state.temperature}
-                               topK={this.state.top_k}
-                               topP={this.state.top_p}
-                               minP={this.state.min_p}
-                               nPredict={this.state.n_predict}
-                               repeatPenalty={this.state.repeat_penalty}
-                               onTemperatureChange={this.handleTemperatureChange}
-                               onTopKChange={this.handleTopKChange}
-                               onTopPChange={this.handleTopPChange}
-                               onMinPChange={this.handleMinPChange}
-                               onMaxTokensChange={this.handleMaxTokensChange}
-                               onRepeatPenaltyChange={this.handleRepeatPenaltyChange} />
+        let eventHandlers = {
+            onTemperatureChange: this.handleTemperatureChange,
+            onTopKChange: this.handleTopKChange,
+            onTopPChange: this.handleTopPChange,
+            onMinPChange: this.handleMinPChange,
+            onMaxTokensChange: this.handleMaxTokensChange,
+            onRepeatPenaltyChange: this.handleRepeatPenaltyChange
+        };
+
+        let settings = {
+            temperature: this.state.temperature,
+            topK: this.state.top_k,
+            topP: this.state.top_p,
+            minP: this.state.min_p,
+            nPredict: this.state.n_predict,
+            repeatPenalty: this.state.repeat_penalty
+        };
+
+        let settingsWidget = (
+            <CollapsibleLLMSettings settings={settings} eventHandlers={eventHandlers} />
         );
 
         let systemMessageWidget = <CollapsibleSystemMessage systemMessage={this.state.system_message} />
@@ -592,7 +549,7 @@ class ActiveChat extends React.Component {
             return (
                 <div>
                     {radio}
-                    {settings}
+                    {settingsWidget}
                     {this.state.system_message && systemMessageWidget}
                     <ConversationTree tree={this.state.chatTree} treePath={this.state.treePath}
                             onBranchSwitch={this.handleBranchSwitch} />
@@ -620,7 +577,7 @@ class ActiveChat extends React.Component {
         return (
             <div>
                 {radio}
-                {settings}
+                {settingsWidget}
                 {this.state.system_message && systemMessageWidget}
                 <ConversationTree tree={this.state.chatTree} treePath={this.state.treePath}
                         onBranchSwitch={this.handleBranchSwitch}

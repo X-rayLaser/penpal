@@ -5,8 +5,14 @@ from rest_framework.response import Response
 from rest_framework import viewsets
 from django.http.response import StreamingHttpResponse, HttpResponseNotAllowed, HttpResponseBadRequest
 from django.views.decorators.csrf import csrf_exempt
-from .models import SystemMessage, Chat, Message
-from .serializers import ChatSerializer, MessageSerializer, TreebankSerializer, SystemMessageSerializer
+from .models import SystemMessage, Preset, Chat, Message
+from .serializers import (
+    ChatSerializer,
+    PresetSerializer,
+    MessageSerializer,
+    TreebankSerializer,
+    SystemMessageSerializer
+)
 import llm_utils
 from plugins import llm_tools
 
@@ -14,6 +20,11 @@ from plugins import llm_tools
 class SystemMessageViewSet(viewsets.ModelViewSet):
     serializer_class = SystemMessageSerializer
     queryset = SystemMessage.objects.all()
+
+
+class PresetViewSet(viewsets.ModelViewSet):
+    serializer_class = PresetSerializer
+    queryset = Preset.objects.all()
 
 
 @csrf_exempt
