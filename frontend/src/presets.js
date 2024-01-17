@@ -12,22 +12,31 @@ import ToastContainer from 'react-bootstrap/ToastContainer';
 import { withRouter } from "./utils";
 
 
+function getRandomInt() {
+    let max = Math.pow(2, 64);
+    return Math.floor(Math.random() * max);
+}
+
+
 function SliderWithInput(props) {
     let errorList = props.errors || [];
     let errorMessages = errorList.map((error, index) => 
         <Alert className="mt-3 mb-3" key={index} variant="danger">{error}</Alert>
     );
 
+    //trick to automatically generate unique ids for fields in GenerationSettings
+    let id =`${props.name}_${getRandomInt()}`;
+
     return (
         <div>
-            <Form.Label>{props.label}</Form.Label>
+            <Form.Label htmlFor={id}>{props.label}</Form.Label>
             <Row>
-                <Col xs={10}>
+                <Col xs={8} sm={10}>
                     <Form.Range min={props.min} max={props.max} step={props.step}
                                 value={props.value} onChange={props.onChange} disabled={props.disabled} />
                 </Col>
                 <Col>
-                    <Form.Control type="number" min={props.min} max={props.max} step={props.step}
+                    <Form.Control id={id} name={props.name} type="number" min={props.min} max={props.max} step={props.step}
                                   value={props.value} onChange={props.onChange} disabled={props.disabled} />
                 </Col>
             </Row>
@@ -67,27 +76,27 @@ function GenerationSettings(props) {
 
     return (
         <div>
-            <SliderWithInput label="Temperature" min="0" max="100" step="0.01" 
+            <SliderWithInput name="temperature" label="Temperature" min="0" max="100" step="0.01" 
                              value={props.settings.temperature} onChange={props.eventHandlers.onTemperatureChange}
                              errors={errors.temperature || []} disabled={disabled} />
 
-            <SliderWithInput label="Top K" min="1" max="1000" step="1" 
+            <SliderWithInput name="top_k" label="Top K" min="1" max="1000" step="1" 
                              value={props.settings.topK} onChange={props.eventHandlers.onTopKChange}
                              errors={errors.top_k || []} disabled={disabled} />
 
-            <SliderWithInput label="Top P" min="0" max="1" step="0.01" 
+            <SliderWithInput name="top_p" label="Top P" min="0" max="1" step="0.01" 
                              value={props.settings.topP} onChange={props.eventHandlers.onTopPChange}
                              errors={errors.top_p || []} disabled={disabled} />
 
-            <SliderWithInput label="Min P" min="0" max="1" step="0.01" 
+            <SliderWithInput name="min_p" label="Min P" min="0" max="1" step="0.01" 
                              value={props.settings.minP} onChange={props.eventHandlers.onMinPChange}
                              errors={errors.min_p || []} disabled={disabled} />
 
-            <SliderWithInput label="Repeatition penalty" min="0" max="100" step="0.01" 
+            <SliderWithInput name="repeat_penalty" label="Repeatition penalty" min="0" max="100" step="0.01" 
                              value={props.settings.repeatPenalty} onChange={props.eventHandlers.onRepeatPenaltyChange}
                              errors={errors.repeat_penalty || []} disabled={disabled} />
 
-            <SliderWithInput label="Maximum # of tokens" min="1" max="4096" step="1" 
+            <SliderWithInput name="n_predict" label="Maximum # of tokens" min="1" max="4096" step="1" 
                              value={props.settings.nPredict} onChange={props.eventHandlers.onMaxTokensChange}
                              errors={errors.n_predict || []} disabled={disabled} />
         </div>
@@ -439,8 +448,9 @@ class PresetsPage extends React.Component {
                         }
                         <Form onSubmit={this.handleSubmitForm}>
                             <Form.Group className="mb-3">
-                                <Form.Label>Name</Form.Label>
-                                <Form.Control type="text" placeholder="Name of your new preset" 
+                                <Form.Label htmlFor="new_preset_name">Name</Form.Label>
+                                <Form.Control id="new_preset_name" name="name" type="text"
+                                              placeholder="Name of your new preset" 
                                               value={this.state.name}
                                               onChange={this.handleNameChange} />
 
@@ -449,7 +459,6 @@ class PresetsPage extends React.Component {
                                 }
                             </Form.Group>
                             <Form.Group className="mb-3">
-                                <Form.Label>Settings</Form.Label>
                                 <GenerationSettings settings={this.state.settings} eventHandlers={handlers}
                                                     errors={this.state.errors} />
                             </Form.Group>
