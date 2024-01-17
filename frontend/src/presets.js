@@ -159,6 +159,50 @@ function StickyToastContainer(props) {
 }
 
 
+function NewPresetForm(props) {
+    let nameErrors = [];
+
+    if (props.errors.hasOwnProperty("name")) {
+        nameErrors = props.errors.name.map((error, index) => 
+            <Alert key={index} className="mt-2 mb-2" variant="danger">{error}</Alert>
+        );
+    }
+
+    // todo: turn this into a component, move related event handlers and fetch calls here
+
+    return (
+        <Card className="mt-2">
+            <Card.Body>
+                <Card.Title>Create a new preset</Card.Title>
+                {props.submissionError && 
+                    <Alert className="mt-3 mb-3" variant="danger">{props.submissionError}</Alert>
+                }
+                <Form onSubmit={props.onSubmitForm}>
+                    <Form.Group className="mb-3">
+                        <Form.Label htmlFor="new_preset_name">Name</Form.Label>
+                        <Form.Control id="new_preset_name" name="name" type="text"
+                                        placeholder="Name of your new preset" 
+                                        value={props.presetName}
+                                        onChange={props.onNameChange} />
+
+                        {nameErrors.length > 0 && 
+                            <div>{nameErrors}</div>
+                        }
+                    </Form.Group>
+                    <Form.Group className="mb-3">
+                        <GenerationSettings settings={props.settings} eventHandlers={props.eventHandlers}
+                                            errors={props.errors} />
+                    </Form.Group>
+                    <Button type="submit" disabled={props.submissionInProgress}>
+                        Create preset
+                    </Button>
+                </Form>
+            </Card.Body>
+        </Card>
+    );
+}
+
+
 class PresetsPage extends React.Component {
     constructor(props) {
         super(props);
@@ -421,14 +465,6 @@ class PresetsPage extends React.Component {
                     disableDelete={this.state.deletionInProgress || this.state.submissionInProgress} />
         );
 
-        let nameErrors = [];
-
-        if (this.state.errors.hasOwnProperty("name")) {
-            nameErrors = this.state.errors.name.map((error, index) => 
-                <Alert key={index} className="mt-2 mb-2" variant="danger">{error}</Alert>
-            );
-        }
-
         return (
             <div>
                 <StickyToastContainer>
@@ -440,34 +476,16 @@ class PresetsPage extends React.Component {
                                             text="You've successfully deleted a preset"
                                             onClose={this.handleHideDeletedToast} />
                 </StickyToastContainer>
-                <Card className="mt-2">
-                    <Card.Body>
-                        <Card.Title>Create a new preset</Card.Title>
-                        {this.state.submissionError && 
-                            <Alert className="mt-3 mb-3" variant="danger">{this.state.submissionError}</Alert>
-                        }
-                        <Form onSubmit={this.handleSubmitForm}>
-                            <Form.Group className="mb-3">
-                                <Form.Label htmlFor="new_preset_name">Name</Form.Label>
-                                <Form.Control id="new_preset_name" name="name" type="text"
-                                              placeholder="Name of your new preset" 
-                                              value={this.state.name}
-                                              onChange={this.handleNameChange} />
 
-                                {nameErrors.length > 0 && 
-                                    <div>{nameErrors}</div>
-                                }
-                            </Form.Group>
-                            <Form.Group className="mb-3">
-                                <GenerationSettings settings={this.state.settings} eventHandlers={handlers}
-                                                    errors={this.state.errors} />
-                            </Form.Group>
-                            <Button type="submit" disabled={this.state.submissionInProgress}>
-                                Create preset
-                            </Button>
-                        </Form>
-                    </Card.Body>
-                </Card>
+                <NewPresetForm submissionError={this.state.submissionError}
+                               onSubmitForm={this.handleSubmitForm}
+                               presetName={this.state.name}
+                               onNameChange={this.handleNameChange}
+                               settings={this.state.settings}
+                               eventHandlers={handlers}
+                               errors={this.state.errors}
+                               submissionInProgress={this.state.submissionInProgress} />
+
                 <h2 className="mt-2 mb-2">Presets</h2>
                 {this.state.deletionError && <Alert variant="danger">{this.state.deletionError}</Alert>}
                 {this.state.fetchPresetsInProgress && <Spinner />}
