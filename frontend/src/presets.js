@@ -8,6 +8,7 @@ import Col from 'react-bootstrap/Col';
 import Row from 'react-bootstrap/Row';
 import Accordion from 'react-bootstrap/Accordion';
 import Toast from 'react-bootstrap/Toast';
+import ToastContainer from 'react-bootstrap/ToastContainer';
 import { withRouter } from "./utils";
 
 
@@ -64,15 +65,6 @@ function GenerationSettings(props) {
         disabled = props.disabled;
     }
 
-    let temperatureErrors = [];
-    if (errors.hasOwnProperty('temperature')) {
-        temperatureErrors = errors.temperature.map((error, index) => 
-            <Alert key={index} variant="danger">{error}</Alert>
-        );
-    }
-
-    let hasErrors = errors.hasOwnProperty('temperature');
-
     return (
         <div>
             <SliderWithInput label="Temperature" min="0" max="100" step="0.01" 
@@ -128,18 +120,35 @@ function Preset(props) {
             <Accordion.Body>
                 <GenerationSettings settings={props.preset.settings} eventHandlers={eventHandlers} 
                                     errors={props.errors} disabled={true} />
-                <Button variant="danger" onClick={handleClick}>Delete preset</Button>
+                <Button variant="danger" onClick={handleClick} disabled={props.disableDelete}>Delete preset</Button>
             </Accordion.Body>
       </Accordion.Item>
     );
 }
 
 
-function Some(props) {
+function AutoclosableToast(props) {
     return (
-        <div>haha, {props.eventKey}</div>
-    )
+        <Toast className="mt-2" bg="success" show={props.show} 
+            delay={3000} autohide onClose={props.onClose}
+            style={{ fontSize: "1.25em" }}>
+            <Toast.Header>
+                <strong className="me-auto">Penpal</strong>
+            </Toast.Header>
+            <Toast.Body className="text-white">{props.text}</Toast.Body>
+        </Toast>
+    );
 }
+
+
+function StickyToastContainer(props) {
+    return (
+        <ToastContainer style={{ position: 'fixed', bottom: 0}}>
+            {props.children}
+        </ToastContainer>
+    );
+}
+
 
 class PresetsPage extends React.Component {
     constructor(props) {
@@ -341,7 +350,7 @@ class PresetsPage extends React.Component {
                 return {
                     presets: newPresets,
                     showDeletedPresetToast: true,
-                    deletionError: false
+                    deletionError: ""
                 };
             });
         }).catch(reason => {
@@ -399,7 +408,8 @@ class PresetsPage extends React.Component {
 
         let accordionItems = this.state.presets.map((p, index) => 
             <Preset key={index} eventKey={p.eventKey} name={p.name} preset={p} 
-                    onDeletePreset={this.handleDeletePreset} />
+                    onDeletePreset={this.handleDeletePreset}
+                    disableDelete={this.state.deletionInProgress || this.state.submissionInProgress} />
         );
 
         let nameErrors = [];
@@ -412,13 +422,15 @@ class PresetsPage extends React.Component {
 
         return (
             <div>
-                <Toast className="mt-2" bg="success" show={this.state.showCreatedPresetToast} 
-                       delay={3000} autohide onClose={this.handleHideCreatedToast}>
-                    <Toast.Header>
-                        <strong className="me-auto">Penpal</strong>
-                    </Toast.Header>
-                    <Toast.Body className="text-white">You've successfully added a new preset</Toast.Body>
-                </Toast>
+                <StickyToastContainer>
+                    <AutoclosableToast show={this.state.showCreatedPresetToast}
+                                            text="You've successfully added a new preset"
+                                            onClose={this.handleHideCreatedToast} />
+
+                    <AutoclosableToast show={this.state.showDeletedPresetToast}
+                                            text="You've successfully deleted a preset"
+                                            onClose={this.handleHideDeletedToast} />
+                </StickyToastContainer>
                 <Card className="mt-2">
                     <Card.Body>
                         <Card.Title>Create a new preset</Card.Title>
@@ -441,18 +453,13 @@ class PresetsPage extends React.Component {
                                 <GenerationSettings settings={this.state.settings} eventHandlers={handlers}
                                                     errors={this.state.errors} />
                             </Form.Group>
-                            <Button type="submit">Create preset</Button>
+                            <Button type="submit" disabled={this.state.submissionInProgress}>
+                                Create preset
+                            </Button>
                         </Form>
                     </Card.Body>
                 </Card>
                 <h2 className="mt-2 mb-2">Presets</h2>
-                <Toast className="mt-2 mb-2" bg="success" show={this.state.showDeletedPresetToast} 
-                       delay={3000} autohide onClose={this.handleHideDeletedToast}>
-                    <Toast.Header>
-                        <strong className="me-auto">Penpal</strong>
-                    </Toast.Header>
-                    <Toast.Body className="text-white">You've successfully deleted a preset</Toast.Body>
-                </Toast>
                 {this.state.deletionError && <Alert variant="danger">{this.state.deletionError}</Alert>}
                 {this.state.fetchPresetsInProgress && <Spinner />}
                 {this.state.fetchPresetsError && <Alert variant="danger">{this.state.fetchPresetsError}</Alert>}
