@@ -23,10 +23,10 @@ import { ConfigurationsPage } from './configurations';
 class App extends React.Component {
     render() {
         return (
-            <Container>
+            <div>
                 <Navbar bg="dark" data-bs-theme="dark">
                     <Container>
-                    <Navbar.Brand href="#home">Navbar</Navbar.Brand>
+                    <Navbar.Brand href="#home">Penpal</Navbar.Brand>
                     <Nav className="me-auto">
                         <Nav.Link href="#my-chats">My chats</Nav.Link>
                         <Nav.Link href="#configurations">Configurations</Nav.Link>
@@ -36,10 +36,12 @@ class App extends React.Component {
                     </Nav>
                     </Container>
                 </Navbar>
-                <div id="detail">
-                    <Outlet />
-                </div>
-            </Container>
+                <Container>
+                    <div id="detail">
+                        <Outlet />
+                    </div>
+                </Container>
+            </div>
         )
     }
 }
