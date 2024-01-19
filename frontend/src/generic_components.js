@@ -78,6 +78,12 @@ class ItemListWithForm extends React.Component {
         );
     }
 
+    containerizeItems(items) {
+        return (
+            <Accordion>{items}</Accordion>
+        );
+    }
+
     renderForm(handleSubmit) {
         throw "Not implmented";
     }
@@ -160,6 +166,7 @@ class ItemListWithForm extends React.Component {
 
     render() {
         let listItems = this.state.items.map((item, index) => this.renderItem(item, index, this.handleDeleteItem));
+        let itemsInContainer = this.containerizeItems(listItems);
         let form = this.renderForm(this.handleSubmit);
 
         return (
@@ -187,7 +194,7 @@ class ItemListWithForm extends React.Component {
                 {this.state.deletionError && <Alert variant="danger">{this.state.deletionError}</Alert>}
                 {this.state.fetchingItems && <Spinner />}
                 {this.state.itemsFetchError && <Alert variant="danger">{this.state.itemsFetchError}</Alert>}
-                {!this.state.fetchingItems && <Accordion>{listItems}</Accordion>}
+                {!this.state.fetchingItems && <div>{itemsInContainer}</div>}
             </div>
         );
     }
@@ -287,5 +294,6 @@ function StickyToastContainer(props) {
 export {
     ItemListWithForm,
     AutoclosableToast,
-    StickyToastContainer
+    StickyToastContainer,
+    GenericFetchJson
 };

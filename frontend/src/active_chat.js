@@ -14,6 +14,7 @@ import {
     getNodeById, getThreadMessages, getConversationText, isHumanText
 } from './tree';
 import { CollapsibleLLMSettings } from './presets';
+import { CollapsibleSystemMessage } from './components';
 
 
 class TextTemplate {
@@ -163,21 +164,6 @@ function ModeSelectionForm(props) {
 }
 
 
-function CollapsibleSystemMessage(props) {
-    let sysMessage = (props.systemMessage && props.systemMessage.text) || "";
-    return (
-        <div>
-            <Accordion>
-                <Accordion.Item eventKey="0">
-                    <Accordion.Header>System Message</Accordion.Header>
-                    <Accordion.Body>{sysMessage}</Accordion.Body>
-                </Accordion.Item>
-            </Accordion>
-        </div>
-    );
-}
-
-
 class ActiveChat extends React.Component {
 
     constructor(props) {
@@ -185,6 +171,7 @@ class ActiveChat extends React.Component {
         this.state = {
             prompt: "",
             system_message: null,
+            configuration: null,
             chatTree: {
                 children: []
             },
@@ -201,6 +188,8 @@ class ActiveChat extends React.Component {
             min_p: 0.05,
             repeat_penalty: 1.1,
             n_predict: 1024,
+
+            toolText: ""
         };
 
         this.handleInput = this.handleInput.bind(this);
@@ -238,10 +227,43 @@ class ActiveChat extends React.Component {
                 "Accept": "application/json"
             }
         }).then(response => response.json()).then(data => {
-            this.setState({ system_message: data.system_message_ro });
+            this.setState({
+                system_message: data.system_message_ro,
+                configuration: data.configuration_ro
+            });
+
+            let preset = data.configuration_ro.preset_ro;
+            console.log("preset:", preset, "data", data);
+            if (preset) {
+                this.setState({
+                    temperature: preset.temperature,
+                    top_k: preset.top_k,
+                    top_p: preset.top_p,
+                    min_p: preset.min_p,
+                    repeat_penalty: preset.repeat_penalty,
+                    n_predict: preset.n_predict
+                });
+            }
+
+            let config = data.configuration_ro;
+
+            let tools = (config && config.tools) || [];
+
+            if (tools.length > 0) {
+                fetch(`/chats/tools-spec/?conf_id=${config.id}`).then(response => 
+                    response.json()
+                ).then(data => {
+                    console.log("NEW DATA:", data)
+                    this.setState({ toolText: data.spec });
+                }).catch(reason => {
+                    console.error(reason);
+                    //add error handling here
+                });
+            }
             
             console.log(data);
         });
+
     }
 
     handleInput(event) {
@@ -429,7 +451,15 @@ class ActiveChat extends React.Component {
         let questionTemplate = new TextTemplate(questionTemplateText);
         let answerTemplate = new TextTemplate(answerTemplateText);
 
-        let sysMessageText = this.state.system_message && this.state.system_message.text;
+        let config = this.state.configuration;
+
+        let sysMessageText = config && config.system_message_ro && config.system_message_ro.text;
+
+        let toolText = this.state.toolText;
+        if (toolText) {
+            sysMessageText += toolText;
+        }
+
         let conversation = getConversationText(
             this.state.chatTree, this.state.treePath,
             questionTemplate, answerTemplate, sysMessageText

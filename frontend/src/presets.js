@@ -50,7 +50,7 @@ function CollapsibleLLMSettings(props) {
         <div className="mt-2">
             <Accordion>
                 <Accordion.Item eventKey="0">
-                    <Accordion.Header>LLM settings</Accordion.Header>
+                    <Accordion.Header>Generation settings</Accordion.Header>
                     <Accordion.Body>
                         <GenerationSettings {...props} />
                     </Accordion.Body>
@@ -101,6 +101,18 @@ function GenerationSettings(props) {
 }
 
 
+function PresetAccordionItem(props) {
+    return (
+        <Accordion.Item eventKey={props.eventKey}>
+            <Accordion.Header>{props.preset.name}</Accordion.Header>
+            <Accordion.Body>
+                <Preset {...props} />
+            </Accordion.Body>
+      </Accordion.Item>
+    );
+}
+
+
 function Preset(props) {
     function handleClick(e) {
         props.onDeletePreset(props.preset);
@@ -121,16 +133,16 @@ function Preset(props) {
     }
 
     return (
-        <Accordion.Item eventKey={props.eventKey}>
-            <Accordion.Header>{props.preset.name}</Accordion.Header>
-            <Accordion.Body>
-                <GenerationSettings settings={props.preset.settings} eventHandlers={eventHandlers} 
-                                    errors={props.errors} disabled={true} />
-                <Button variant="danger" onClick={handleClick} disabled={props.disableDelete}>Delete preset</Button>
-            </Accordion.Body>
-      </Accordion.Item>
+        <div>
+            <GenerationSettings settings={props.preset.settings} eventHandlers={eventHandlers} 
+                                errors={props.errors} disabled={true} />
+            {props.onDeletePreset &&
+            <Button variant="danger" onClick={handleClick} disabled={props.disableDelete}>Delete preset</Button>
+            }
+        </div>
     );
 }
+
 
 
 function copyObject(obj) {
@@ -280,7 +292,7 @@ class PresetsPage extends ItemListWithForm {
 
     renderItem(item, index, handleDeleteItem) {
         return (
-                <Preset key={index} eventKey={index} name={item.name} preset={item}
+                <PresetAccordionItem key={index} eventKey={index} name={item.name} preset={item}
                     onDeletePreset={handleDeleteItem}
                     disableDelete={this.state.deletionInProgress || this.state.submissionInProgress} />
         );
@@ -299,5 +311,6 @@ PresetsPage = withRouter(PresetsPage);
 
 export {
     PresetsPage,
-    CollapsibleLLMSettings
+    CollapsibleLLMSettings,
+    Preset
 }

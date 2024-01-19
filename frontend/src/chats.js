@@ -16,10 +16,10 @@ class ChatsList extends React.Component {
             buttonDisabled: false,
             chats: [],
             loading_chats: true,
-            loading_system_messages: true,
-            system_messages: [],
+            loading_configs: true,
+            configs: [],
             selected_name: "",
-            name_to_message: {}
+            name_to_config: {}
         };
     }
 
@@ -39,7 +39,7 @@ class ChatsList extends React.Component {
             })
         });
 
-        fetch('/chats/system_messages/', {
+        fetch('/chats/configurations/', {
             method: "GET",
             headers: {
                 "Content-Type": "application/json",
@@ -48,16 +48,16 @@ class ChatsList extends React.Component {
         }).then(response => {
             return response.json();
         }).then(data => {
-            let name_to_message = {};
-            data.forEach(msg => {
-                name_to_message[msg.name] = msg;
+            let name_to_config = {};
+            data.forEach(conf => {
+                name_to_config[conf.name] = conf;
             });
 
             this.setState({
-                system_messages: data,
+                configs: data,
                 selected_name: data[0].name,
-                name_to_message,
-                loading_system_messages: false
+                name_to_config,
+                loading_configs: false
             })
         });
     }
@@ -72,11 +72,11 @@ class ChatsList extends React.Component {
             let body = {};
 
             if (self.state.selected_name) {
-                let systemMessage = self.state.name_to_message[self.state.selected_name];
-                if (!systemMessage) {
-                    console.error(`Message lookup failed on key ${self.state.selected_name}`);
+                let config = self.state.name_to_config[self.state.selected_name];
+                if (!config) {
+                    console.error(`Configuration lookup failed on key ${self.state.selected_name}`);
                 } else {
-                    body.system_message = systemMessage.id;
+                    body.configuration = config.id;
                 }
             }
 
@@ -84,7 +84,8 @@ class ChatsList extends React.Component {
                 method: 'POST',
                 body: JSON.stringify(body),
                 headers: {
-                    "Content-Type": "application/json"
+                    "Content-Type": "application/json",
+                    "Accept": "application/json"
                 }
             }).then(response => {
                 return response.json();
@@ -94,7 +95,7 @@ class ChatsList extends React.Component {
             });
         }
 
-        function changeMessageHandler(e) {
+        function changeConfigurationHandler(e) {
             let name = e.target.value;
 
             self.setState({
@@ -106,17 +107,15 @@ class ChatsList extends React.Component {
             <li key={index}><Link to={`/chats/${chat.id}/`}>{chat.prompt_text}</Link></li>
         );
 
-        let messages;
+        let configs;
 
-        if (this.state.system_messages.length > 0) {
-            messages = this.state.system_messages.map((message, index) =>
-                <option key={index} value={message.name}>{message.name}</option>
+        if (this.state.configs.length > 0) {
+            configs = this.state.configs.map((conf, index) =>
+                <option key={index} value={conf.name}>{conf.name}</option>
             );
         } else {
-            messages = [];
+            configs = [];
         }
-
-        let systemMessage = this.state.name_to_message[this.state.selected_name];
 
         return (
             <div>
@@ -126,26 +125,18 @@ class ChatsList extends React.Component {
                         <Form>
                             <Row>
                                 <Col xs={10}>
-                                    <Form.Select aria-label="System message selection" value={this.state.selected_name}
-                                                 onChange={changeMessageHandler}>
-                                        {messages}
+                                    <Form.Select aria-label="Configuration selection" value={this.state.selected_name}
+                                                 onChange={changeConfigurationHandler}>
+                                        {configs}
                                     </Form.Select>
                                 </Col>
                                 <Col>
                                     <Button variant="light" onClick={clickHandler} 
-                                            disabled={this.state.buttonDisabled || this.state.loading_system_messages}>
+                                            disabled={this.state.buttonDisabled || this.state.loading_configs}>
                                         Create
                                     </Button>
                                 </Col>
                             </Row>
-                            {systemMessage &&
-                            <Card bg="light" text="dark" className="mt-2 mb-2">
-                                <Card.Body>
-                                    <Card.Title>System message</Card.Title>
-                                    <Card.Text>{systemMessage.text}</Card.Text>
-                                </Card.Body>
-                            </Card>
-                            }
                         </Form>
                     </Card.Body>
                 </Card>

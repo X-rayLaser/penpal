@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import SystemMessage, Preset, Chat, Message
+from .models import SystemMessage, Preset, Configuration, Chat, Message
 import markdown
 
 
@@ -16,18 +16,40 @@ class PresetSerializer(serializers.ModelSerializer):
                   'top_p', 'min_p', 'repeat_penalty', 'n_predict']
 
 
+class ConfigurationSerializer(serializers.ModelSerializer):
+
+    system_message_ro = SystemMessageSerializer(source="system_message", read_only=True)
+    preset_ro = PresetSerializer(source="preset", read_only=True)
+
+    class Meta:
+        model = Configuration
+        fields = ['id', 'name', 'context_size', 'system_message',
+                  'system_message_ro', 'preset', 'preset_ro', 'tools']
+
+    def update(self, instance, validated_data):
+        # todo: consider other approaches
+        validated_data.pop('system_message')
+        validated_data.pop('preset')
+        validated_data.pop('tools')
+        return super().update(instance, validated_data)
+
+
 class ChatSerializer(serializers.ModelSerializer):
     prompt_text = serializers.ReadOnlyField(source='prompt.text', default="**No data yet**")
 
     system_message_ro = SystemMessageSerializer(source="system_message", read_only=True)
 
+    configuration_ro = ConfigurationSerializer(source="configuration", read_only=True)
+
     class Meta:
         model = Chat
-        fields = ['id', 'system_message', 'system_message_ro', 'prompt_text', 'human']
+        fields = ['id', 'configuration', 'configuration_ro', 'system_message',
+                  'system_message_ro', 'prompt_text', 'human']
 
     def update(self, instance, validated_data):
         # todo: consider other approaches
         validated_data.pop('system_message')
+        validated_data.pop('configuration')
         return super().update(instance, validated_data)
 
 

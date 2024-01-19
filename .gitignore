@@ -10,3 +10,4 @@ frontend/public
 package-lock.json
 llama.cpp
 *.log
+plugins/specs

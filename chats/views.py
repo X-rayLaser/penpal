@@ -1,20 +1,22 @@
 import json
+import os
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import viewsets
 from django.http.response import StreamingHttpResponse, HttpResponseNotAllowed, HttpResponseBadRequest
 from django.views.decorators.csrf import csrf_exempt
-from .models import SystemMessage, Preset, Chat, Message
+from .models import SystemMessage, Preset, Configuration, Chat, Message
 from .serializers import (
     ChatSerializer,
+    ConfigurationSerializer,
     PresetSerializer,
     MessageSerializer,
     TreebankSerializer,
     SystemMessageSerializer
 )
 import llm_utils
-from plugins import llm_tools
+from plugins import llm_tools, get_specification
 
 
 class SystemMessageViewSet(viewsets.ModelViewSet):
@@ -25,6 +27,11 @@ class SystemMessageViewSet(viewsets.ModelViewSet):
 class PresetViewSet(viewsets.ModelViewSet):
     serializer_class = PresetSerializer
     queryset = Preset.objects.all()
+
+
+class ConfigurationViewSet(viewsets.ModelViewSet):
+    serializer_class = ConfigurationSerializer
+    queryset = Configuration.objects.all()
 
 
 @csrf_exempt
@@ -136,6 +143,16 @@ def message_detail(request, pk):
 
 
 @api_view(['GET'])
+def tools_specification(request):
+    conf_id = request.query_params.get('conf_id')
+    configuration = Configuration.objects.get(pk=conf_id)
+
+    full_spec = get_specification(configuration)
+    print('full spec:\n', full_spec)
+    return Response({ 'spec': full_spec })
+
+
+@api_view(['GET'])
 def call_api(request):
     tool = request.query_params.get('tool')
     arg_string = request.query_params.get('arg_string')
@@ -145,7 +162,7 @@ def call_api(request):
 
     func = llm_tools.get(tool)
     if not func:
-        Response({tool: 'This tool does not exist'}, status=400)
+        return Response({tool: 'This tool does not exist'}, status=400)
     
     print('tool', tool, 'args', args)
     try:

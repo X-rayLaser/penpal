@@ -8,23 +8,34 @@ import {
     RouterProvider,
 } from "react-router-dom";
 import { Outlet, Link } from "react-router-dom";
+import Nav from 'react-bootstrap/Nav';
+import Navbar from 'react-bootstrap/Navbar';
+
 import { ChatsList } from "./chats";
 import { ActiveChat } from './active_chat';
 import { ErrorPage } from './errors';
 import { TextCompletionPage } from './text_completion';
 import { SystemMessageList } from './system_messages';
 import { PresetsPage } from './presets';
+import { ConfigurationsPage } from './configurations';
+
 
 class App extends React.Component {
     render() {
         return (
             <Container>
-                <div>
-                    <Link to={"my-chats"}>My chats</Link>
-                    <Link to={"presets"}>LLM presets</Link>
-                    <Link to={"my-system-messages"}>My system messages</Link>
-                    <Link to={"completion"}>Text completion</Link>
-                </div>
+                <Navbar bg="dark" data-bs-theme="dark">
+                    <Container>
+                    <Navbar.Brand href="#home">Navbar</Navbar.Brand>
+                    <Nav className="me-auto">
+                        <Nav.Link href="#my-chats">My chats</Nav.Link>
+                        <Nav.Link href="#configurations">Configurations</Nav.Link>
+
+                        <Nav.Link href="#my-system-messages">System messages</Nav.Link>
+                        <Nav.Link href="#presets">Presets</Nav.Link>
+                    </Nav>
+                    </Container>
+                </Navbar>
                 <div id="detail">
                     <Outlet />
                 </div>
@@ -51,6 +62,10 @@ const router = createHashRouter([
             {
                 path: "/chats/:id/",
                 element: <ActiveChat />
+            },
+            {
+                path: "/configurations/",
+                element: <ConfigurationsPage />
             },
             {
                 path: "/presets/",

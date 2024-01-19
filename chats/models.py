@@ -44,7 +44,27 @@ class Preset(models.Model):
         return self.name
 
 
+class Configuration(models.Model):
+    name = models.CharField(max_length=100)
+
+    context_size = models.PositiveIntegerField(
+        default=512, validators=[MinValueValidator(1), MaxValueValidator(100000)]
+    )
+
+    system_message = models.ForeignKey(SystemMessage, related_name="configurations",
+                                       blank=True, null=True, on_delete=models.SET_NULL)
+    preset = models.ForeignKey(Preset, related_name="configurations",
+                               blank=True, null=True, on_delete=models.SET_NULL)
+
+    tools = models.JSONField()
+
+    def __str__(self):
+        return self.name
+
+
 class Chat(models.Model):
+    configuration = models.ForeignKey(Configuration, related_name='chats',
+                                      blank=True, null=True, on_delete=models.SET_NULL)
     system_message = models.ForeignKey(SystemMessage, related_name='chats',
                                        blank=True, null=True, on_delete=models.SET_NULL)
     prompt = models.OneToOneField('Message', related_name='chat', on_delete=models.SET_NULL,

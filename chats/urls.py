@@ -7,6 +7,7 @@ from . import views
 router = routers.DefaultRouter()
 router.register("system_messages", views.SystemMessageViewSet)
 router.register("presets", views.PresetViewSet)
+router.register("configurations",views.ConfigurationViewSet)
 
 urlpatterns = [
     path('generate_reply/', views.generate_reply),
@@ -16,7 +17,8 @@ urlpatterns = [
     path('chats/<int:pk>/', views.chat_detail),
     path('treebanks/<int:pk>/', views.treebank_detail),
     path('messages/', views.message_list),
-    path('messages/<int:pk>/', views.message_detail)
+    path('messages/<int:pk>/', views.message_detail),
+    path('tools-spec/', views.tools_specification)
 ]
 
 urlpatterns += router.urls
