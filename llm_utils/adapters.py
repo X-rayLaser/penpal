@@ -33,7 +33,7 @@ class DummyMarkdownAdapter(LLMAdapter):
 
 class DummyToolUseAdapter(LLMAdapter):
     def stream_tokens(self, prompt, clear_context=False, llm_settings=None):
-        tokens1 = ["one ", "two ", "three ", "<", "api>", "calculate", 
+        tokens1 = ["one ", "two ", "three ", "<", "api>", "calculator", 
                   "(+,", "2,3)", "</api>", " rest", " to be ", "discarded "]
         tokens2 = ["four", "five", "six"]
         

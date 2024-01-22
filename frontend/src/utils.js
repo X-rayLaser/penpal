@@ -94,7 +94,7 @@ class ApiCall {
 function findPendingApiCall(generatedText) {
     //returns first pending API call and its index, otherwise return null
     generatedText = generatedText.toLowerCase();
-    let results = generatedText.match(/<api>[a-z_]+\(.*/);
+    let results = generatedText.match(/<api>[a-z_]+\(.*<\/api>/);
     if (!results || results.length === 0) {
         return null;
     }

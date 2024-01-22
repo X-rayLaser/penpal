@@ -16,7 +16,7 @@ from .serializers import (
     SystemMessageSerializer
 )
 import llm_utils
-from plugins import llm_tools, get_specification
+from tools import llm_tools, get_specification
 
 
 class SystemMessageViewSet(viewsets.ModelViewSet):
@@ -156,7 +156,7 @@ def tools_specification(request):
 def call_api(request):
     tool = request.query_params.get('tool')
     arg_string = request.query_params.get('arg_string')
-    print('tool', tool, 'arg string', arg_string)
+    print('tool', tool, 'arg string', arg_string, 'llm_tools', llm_tools)
     args = arg_string.split(",")
     args = [arg.strip().lower() for arg in args]
 

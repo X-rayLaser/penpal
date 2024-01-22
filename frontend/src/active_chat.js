@@ -228,12 +228,12 @@ class ActiveChat extends React.Component {
             }
         }).then(response => response.json()).then(data => {
             this.setState({
-                system_message: data.system_message_ro,
+                system_message: data.configuration_ro.system_message_ro,
                 configuration: data.configuration_ro
             });
 
             let preset = data.configuration_ro.preset_ro;
-            console.log("preset:", preset, "data", data);
+            console.log("preset:", preset, "data", data, "sys message", data.configuration_ro.system_message_ro);
             if (preset) {
                 this.setState({
                     temperature: preset.temperature,
