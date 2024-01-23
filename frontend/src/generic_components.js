@@ -204,7 +204,7 @@ class ItemListWithForm extends React.Component {
 class GenericFetchJson {
     constructor() {
         this.method = 'GET';
-        this.bodyObject = {};
+        this.body = {};
         this.okRespondWithJson = true;
 
         this.messages = {

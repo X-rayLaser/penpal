@@ -20,7 +20,7 @@ export const withRouter = WrappedComponent => props => {
 };
 
 
-export function generateResponse(prompt, llmSettings, onChunk, onPaused, onDone) {
+export function generateResponse(prompt, llmSettings, onChunk, onPaused, onDone, onError) {
     let generatedText = "";
     let lastChunk = "";
 
@@ -60,7 +60,7 @@ export function generateResponse(prompt, llmSettings, onChunk, onPaused, onDone)
 
                 onPaused(finalizedSegment);
                 let newPrompt = prompt + finalizedSegment;
-                generateResponse(newPrompt, llmSettings, onChunk, onPaused, onDone);
+                generateResponse(newPrompt, llmSettings, onChunk, onPaused, onDone, onError);
             });
             
         } else {
@@ -68,7 +68,11 @@ export function generateResponse(prompt, llmSettings, onChunk, onPaused, onDone)
         }
     }
 
-    streamJsonResponse('/chats/generate_reply/', 'POST', body, handleChunk, handleDone);
+    streamJsonResponse(
+        '/chats/generate_reply/', 'POST', body, handleChunk, handleDone
+    ).catch(reason => {
+        onError(reason.error);
+    });
 }
 
 class ApiCall {
@@ -79,7 +83,7 @@ class ApiCall {
     }
 
     renderWithResult(result) {
-        return `<api>${this.name}(${this.argString})=${result}</api>`;
+        return `<api>${this.name}(${this.argString})</api><result>${result}</result>`;
     }
 
     toUrlPath() {
@@ -94,7 +98,7 @@ class ApiCall {
 function findPendingApiCall(generatedText) {
     //returns first pending API call and its index, otherwise return null
     generatedText = generatedText.toLowerCase();
-    let results = generatedText.match(/<api>[a-z_]+\(.*<\/api>/);
+    let results = generatedText.match(/<api>[\s]*[a-z_]+\(.*<\/api>/);
     if (!results || results.length === 0) {
         return null;
     }
@@ -109,7 +113,7 @@ function findPendingApiCall(generatedText) {
         throw new Error(msg);
     }
     str = str.replace("<api>", "").replace("</api>", "");
-    str = str.replace(/=.*/, "");
+    str = str.replace(/=.*/, "").trim();
 
     let name = str.match(/^[a-z_]+/)[0];
     let argString;
@@ -123,7 +127,7 @@ function findPendingApiCall(generatedText) {
 }
 
 export function streamJsonResponse(url, method, data, handleChunk, handleDone) {
-    fetch(url, {
+    return fetch(url, {
         method: method,
         body: JSON.stringify(data),
         headers: {
@@ -132,8 +136,15 @@ export function streamJsonResponse(url, method, data, handleChunk, handleDone) {
     }).then(response => {
         let reader = response.body.getReader();
 
+        if (!response.ok) {
+            throw {
+                error: response.statusText
+            };
+        }
+
         // handle server error
         reader.read().then(function pump({ done, value }) {
+            console.log('ok?', response.ok)
             if (done) {
                 handleDone();
                 return;
@@ -143,7 +154,11 @@ export function streamJsonResponse(url, method, data, handleChunk, handleDone) {
 
             handleChunk(chunk);
             
-            return reader.read().then(pump);
+            return reader.read().then(pump).catch(reason => {
+                console.error(reason);
+            });
+        }).catch(reason => {
+            console.error(reason);
         });
     });
 }

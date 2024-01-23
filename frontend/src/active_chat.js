@@ -7,6 +7,7 @@ import Button from 'react-bootstrap/Button';
 import Spinner from 'react-bootstrap/Spinner';
 import Card from 'react-bootstrap/Card';
 import Pagination from 'react-bootstrap/Pagination';
+import Alert from 'react-bootstrap/Alert';
 import { streamJsonResponse } from './utils';
 import { withRouter, generateResponse } from "./utils";
 import { 
@@ -15,7 +16,7 @@ import {
 } from './tree';
 import { CollapsibleLLMSettings } from './presets';
 import { CollapsibleSystemMessage } from './components';
-
+import { GenericFetchJson } from './generic_components';
 
 class TextTemplate {
     constructor(template) {
@@ -189,7 +190,9 @@ class ActiveChat extends React.Component {
             repeat_penalty: 1.1,
             n_predict: 1024,
 
-            toolText: ""
+            toolText: "",
+            submissionErrors: [],
+            generationError: ""
         };
 
         this.handleInput = this.handleInput.bind(this);
@@ -303,9 +306,21 @@ class ActiveChat extends React.Component {
                     inProgress: true,
                     completion: "",
                     chatTree: res.tree,
-                    treePath: res.thread
+                    treePath: res.thread,
+                    submissionErrors: []
                 }
             }, this.generateData);
+        }).catch(reason => {
+            console.error("Reason is ", reason)
+            
+            let submissionErrors;
+            if (reason.hasOwnProperty("fieldErrors")) {
+                submissionErrors = reason.fieldErrors.text;
+            } else {
+                submissionErrors = [reason.error];
+            }
+
+            this.setState({ submissionErrors });
         });
     }
 
@@ -318,15 +333,12 @@ class ActiveChat extends React.Component {
         if (chatId) {
             data["chat"] = chatId;
         }
-        return fetch('/chats/messages/', {
-            method: 'POST',
-            body: JSON.stringify(data),
-            headers: {
-                "Content-Type": "application/json"
-            }
-        }).then(response => {
-            return response.json();
-        });
+
+        let fetcher = new GenericFetchJson();
+        fetcher.method = 'POST';
+        fetcher.body = data;
+
+        return fetcher.performFetch('/chats/messages/');
     }
 
     handleGenerate() {
@@ -334,9 +346,6 @@ class ActiveChat extends React.Component {
     }
 
     handleRegenerate(pathItem) {
-        console.log(`handle regenerate: ${pathItem}`);
-        console.log(pathItem);
-
         let self = this;
 
         this.setState(prevState => {
@@ -358,9 +367,6 @@ class ActiveChat extends React.Component {
     generateData() {
         let leaf = traverseTree(this.state.chatTree, this.state.treePath);
         let committedText = "";
-
-        console.log("in NEW GENERATE DATA, leaf:")
-        console.log(leaf);
 
         const handleChunk = (generatedText, chunk) => {
             this.setState(prevState => {
@@ -399,11 +405,22 @@ class ActiveChat extends React.Component {
                         inProgress: false,
                         chatTree: res.tree,
                         contextLoaded: true,
-                        treePath: res.thread
+                        treePath: res.thread,
+                        generationError: ""
                     }
                 });
             });
         }
+        const handleError = reason => {
+            this.setState({ 
+                prompt: "",
+                completion: "",
+                inProgress: false,
+                contextLoaded: true,
+                generationError: reason
+            });
+        };
+
         //let prompt = this.preparePrompt(leaf);
         let prompt = this.preparePromptWithRecreatedConversation();
 
@@ -420,7 +437,7 @@ class ActiveChat extends React.Component {
             repeat_penalty: this.state.repeat_penalty
         };
 
-        generateResponse(prompt, llmSettings, handleChunk, handlePause, handleDone)
+        generateResponse(prompt, llmSettings, handleChunk, handlePause, handleDone, handleError);
     }
 
     preparePrompt(leaf) {
@@ -573,7 +590,13 @@ class ActiveChat extends React.Component {
             <CollapsibleLLMSettings settings={settings} eventHandlers={eventHandlers} />
         );
 
-        let systemMessageWidget = <CollapsibleSystemMessage systemMessage={this.state.system_message} />
+        let systemMessageWidget = (
+            <CollapsibleSystemMessage systemMessage={this.state.system_message} />
+        );
+
+        let submissionErrorsAlerts = this.state.submissionErrors.map((error, index) =>
+            <Alert key={index} variant="danger" className="mb-3">{error}</Alert>
+        );
 
         if (this.hasNoReply()) {
             return (
@@ -583,6 +606,9 @@ class ActiveChat extends React.Component {
                     {this.state.system_message && systemMessageWidget}
                     <ConversationTree tree={this.state.chatTree} treePath={this.state.treePath}
                             onBranchSwitch={this.handleBranchSwitch} />
+                    {this.state.generationError && <Alert variant="danger">
+                        {this.state.generationError}</Alert>
+                    }
                     <div>It looks like AI did not reply for some reason</div>
 
                     <Button onClick={this.handleGenerate}>Generate reply</Button>
@@ -602,7 +628,11 @@ class ActiveChat extends React.Component {
                 <span>  Generating</span>
             </Button>;
         } else {            
-            button = <Button variant="primary" type="submit">Generate completion</Button>;
+            button = (
+                <Button variant="primary" type="submit" disabled={this.state.prompt.length === 0}>
+                    Generate completion
+                </Button>
+            );
         }
         return (
             <div>
@@ -618,6 +648,10 @@ class ActiveChat extends React.Component {
                     <Form.Group className="mb-3" controlId="exampleForm.ControlTextarea1">
                         <Form.Label>Use LLM to complete your prompt</Form.Label>
                         {textarea}
+
+                        {submissionErrorsAlerts.length > 0 && 
+                            <div className="mt-3">{submissionErrorsAlerts}</div>
+                        }
                     </Form.Group>
                     {button}
                 </Form>

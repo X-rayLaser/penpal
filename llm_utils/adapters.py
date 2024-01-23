@@ -43,6 +43,12 @@ class DummyToolUseAdapter(LLMAdapter):
             yield token
 
 
+class DummyExceptionRaisingAdapter(LLMAdapter):
+    def stream_tokens(self, prompt, clear_context=False, llm_settings=None):
+        yield 5 / 0
+        yield "hey"
+
+
 class RemoteLLMAdapter(LLMAdapter):
     def __init__(self, host, port):
         self.host = host
@@ -51,6 +57,7 @@ class RemoteLLMAdapter(LLMAdapter):
     def stream_tokens(self, prompt, clear_context=False, llm_settings=None):
         llm_settings = llm_settings or {}
 
+        clear_context = False
         if clear_context:
             url = f"http://{self.host}:{self.port}/clear-context"
             resp = requests.post(url)
