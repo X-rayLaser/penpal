@@ -18,7 +18,8 @@ urlpatterns = [
     path('treebanks/<int:pk>/', views.treebank_detail),
     path('messages/', views.message_list),
     path('messages/<int:pk>/', views.message_detail),
-    path('tools-spec/', views.tools_specification)
+    path('tools-spec/', views.tools_specification),
+    path('supported-tools/', views.supported_tools)
 ]
 
 urlpatterns += router.urls

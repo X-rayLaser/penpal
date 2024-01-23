@@ -142,6 +142,12 @@ def message_detail(request, pk):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+@api_view(['get'])
+def supported_tools(request):
+    tools = [tool.lower() for tool in llm_tools.keys()]
+    return Response(tools)
+
+
 @api_view(['GET'])
 def tools_specification(request):
     conf_id = request.query_params.get('conf_id')

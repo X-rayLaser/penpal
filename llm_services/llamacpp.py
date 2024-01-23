@@ -104,7 +104,8 @@ class HttpHandler(BaseHTTPRequestHandler):
         self.protocol_version = 'HTTP/1.0'
 
         if self.path == '/clear-context':
-            self.handle_clear_context()
+            # when running llama.cpp server, clearing context is unnecessary
+            pass
         elif self.path == '/completion':
             self.handle_completion()
         else:

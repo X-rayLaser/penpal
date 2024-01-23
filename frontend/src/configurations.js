@@ -181,10 +181,9 @@ class NewConfigurationForm extends React.Component {
             loadingSystemMessages: true,
             loadingPresets: true,
             contextSize: 512,
-            tools: []
+            tools: [],
+            supportedTools: []
         };
-
-        this.supportedTools = ["calculator", "datetime"];
 
         this.handleNameChange = this.handleNameChange.bind(this);
         this.handleSystemMessageChange = this.handleSystemMessageChange.bind(this);
@@ -224,6 +223,10 @@ class NewConfigurationForm extends React.Component {
                 nameToPreset,
                 loadingPresets: false
             })
+        });
+
+        fetcher.performFetch('/chats/supported-tools/').then(data => {
+            this.setState({ supportedTools: data });
         });
     }
 
@@ -288,7 +291,7 @@ class NewConfigurationForm extends React.Component {
             );
         }
 
-        let checkboxes = this.supportedTools.map((name, index) => {
+        let checkboxes = this.state.supportedTools.map((name, index) => {
             let checked = false;
 
             this.state.tools.forEach(tool => {
