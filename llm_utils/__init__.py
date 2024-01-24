@@ -1,24 +1,19 @@
-import json
 import importlib
 from django.conf import settings
 
-adapter_conf = settings.LLM_SETTINGS["adapter"]
-adapter_path = adapter_conf["class"]
-adapter_kwargs = adapter_conf["kwargs"]
+conf = settings.LLM_SETTINGS["generator"]
+generator_path = conf["class"]
+generator_kwargs = conf["kwargs"]
 
-parts = adapter_path.split(".")
+parts = generator_path.split(".")
 module_path = ".".join(parts[:-1])
-adapter_class = parts[-1]
+generator_class = parts[-1]
 
-cls = getattr(importlib.import_module(module_path), adapter_class)
-adapter = cls(**adapter_kwargs)
+cls = getattr(importlib.import_module(module_path), generator_class)
+token_generator = cls(**generator_kwargs)
 
 
 def stream_tokens(prompt, clear_context=False, llm_settings=None, **settings):
-    for token in adapter.stream_tokens(prompt, clear_context=clear_context, 
-                                       llm_settings=llm_settings, **settings):
+    for token in token_generator.stream_tokens(prompt, clear_context=clear_context,
+                                               llm_settings=llm_settings, **settings):
         yield token
-
-
-def clear_context():
-    adapter.clear_context()

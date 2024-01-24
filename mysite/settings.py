@@ -138,8 +138,8 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 #}
 
 LLM_SETTINGS = {
-    "adapter": {
-        "class": "llm_utils.adapters.DummyAdapter",
+    "generator": {
+        "class": "llm_utils.dummy_generators.DummyGenerator",
         "kwargs": {}
     }
 }

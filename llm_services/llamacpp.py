@@ -154,7 +154,8 @@ if __name__ == '__main__':
                       model_path=args.model,
                       host="localhost",
                       port=9500,
-                      num_gpu_layers=args.ngl)
+                      num_gpu_layers=args.ngl,
+                      context_size=args.c)
 
     server = HTTPServer((args.host, args.port), HttpHandler)
     server.serve_forever()
