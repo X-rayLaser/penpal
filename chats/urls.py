@@ -12,7 +12,8 @@ router.register("configurations", views.ConfigurationViewSet)
 urlpatterns = [
     path('generate_reply/', views.generate_reply),
     path('completion/', views.generate_completion),
-    path('call_api/', views.call_api),
+    path('find_api_call/', views.find_api_call_view),
+    path('call_api/', views.call_api_view, name='call_api'),
     path('chats/', views.chat_list),
     path('chats/<int:pk>/', views.chat_detail),
     path('treebanks/<int:pk>/', views.treebank_detail),

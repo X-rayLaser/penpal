@@ -1,5 +1,4 @@
 import json
-import os
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -17,6 +16,12 @@ from .serializers import (
 )
 import llm_utils
 from tools import llm_tools, get_specification
+from tools.api_calls import (
+    find_api_call,
+    make_api_call,
+    ApiFunctionCall,
+    ApiCallNotFoundError
+)
 
 
 class SystemMessageViewSet(viewsets.ModelViewSet):
@@ -159,21 +164,36 @@ def tools_specification(request):
 
 
 @api_view(['GET'])
-def call_api(request):
-    tool = request.query_params.get('tool')
+def find_api_call_view(request):
+    text = request.query_params.get('text')
+
+    try:
+        api_call, offset = find_api_call(text)
+        res = {
+            'offset': offset,
+            'api_call': api_call.todict()
+        }
+    except ApiCallNotFoundError:
+        res = {}
+
+    return Response(res)
+
+
+@api_view(['GET'])
+def call_api_view(request):
+    name = request.query_params.get('name')
     arg_string = request.query_params.get('arg_string')
-    print('tool', tool, 'arg string', arg_string, 'llm_tools', llm_tools)
+
+
+    print('query params', request.query_params, 'tool', name, 'arg string', arg_string, 'llm_tools', llm_tools)
     args = arg_string.split(",")
     args = [arg.strip().lower() for arg in args]
 
-    func = llm_tools.get(tool)
-    if not func:
-        return Response({tool: 'This tool does not exist'}, status=400)
-    
-    print('tool', tool, 'args', args)
-    try:
-        result = func(*args)
-        data = dict(result=result)
-        return Response(data, status=status.HTTP_200_OK)
-    except Exception as e:
-        return Response({ tool: f'Invalid tool use: {repr(e)}' }, status=status.HTTP_400_BAD_REQUEST)
+    api_call = ApiFunctionCall(name, args)
+    api_call_string = make_api_call(api_call)
+
+    print('api_call_string', api_call_string)
+
+    return Response({
+        'api_call_string': api_call_string
+    })

@@ -40,32 +40,35 @@ export function generateResponse(prompt, llmSettings, onChunk, onPaused, onDone,
     
     const handleDone = () => {
 
-        let apiCallObject = findPendingApiCall(generatedText);
-
-
-        console.log('handleDone in GENERATERESPONSE: apiCallObject', apiCallObject);
+        console.log('handleDone in GENERATERESPONSE');
         console.log(generatedText);
 
-        if (apiCallObject) {
-            let textSlice = generatedText.substring(0, apiCallObject.offset);
+        let encodedText = encodeURIComponent(generatedText);
+        let findApiUrl = `/chats/find_api_call/?text=${encodedText}`;
+        fetch(findApiUrl).then(response => response.json()).then(data => {
+            console.log("CALLED FIND API CALL", data)
+            if (data.hasOwnProperty('offset')) {
+                let offset = data.offset;
+                let api_call = data.api_call;
 
-            let url = apiCallObject.toUrlPath();
-            fetch(url, {
-                headers: {
-                    'Accept': 'application/json'
-                }
-            }).then(response => response.json()).then(data => {
-                let apiCallString = apiCallObject.renderWithResult(data.result);
-                let finalizedSegment = textSlice + apiCallString;
-
-                onPaused(finalizedSegment);
-                let newPrompt = prompt + finalizedSegment;
-                generateResponse(newPrompt, llmSettings, onChunk, onPaused, onDone, onError);
-            });
-            
-        } else {
-            onDone(generatedText);
-        }
+                let textSlice = generatedText.substring(0, offset);
+                console.log("APICALL URL", api_call.url);
+                fetch(api_call.url, {
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                }).then(response => response.json()).then(data => {
+                    let finalizedSegment = textSlice + data.api_call_string;
+    
+                    onPaused(finalizedSegment);
+                    let newPrompt = prompt + finalizedSegment;
+                    generateResponse(newPrompt, llmSettings, onChunk, onPaused, onDone, onError);
+                });
+            } else {
+                console.log("API call not found");
+                onDone(generatedText);
+            }
+        });
     }
 
     streamJsonResponse(
