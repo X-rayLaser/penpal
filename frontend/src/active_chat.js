@@ -15,7 +15,9 @@ import {
     getNodeById, getThreadMessages, getConversationText, isHumanText
 } from './tree';
 import { CollapsibleLLMSettings } from './presets';
-import { CollapsibleSystemMessage } from './components';
+import { 
+    CollapsibleSystemMessage, CollapsibleEditableSystemMessage
+} from './components';
 import { GenericFetchJson } from './generic_components';
 
 class TextTemplate {
@@ -211,6 +213,7 @@ class ActiveChat extends React.Component {
         this.handleMinPChange = this.handleMinPChange.bind(this);
         this.handleMaxTokensChange = this.handleMaxTokensChange.bind(this);
         this.handleRepeatPenaltyChange = this.handleRepeatPenaltyChange.bind(this);
+        this.handleSystemMessageChanged = this.handleSystemMessageChanged.bind(this);
     }
 
     componentDidMount() {
@@ -230,6 +233,10 @@ class ActiveChat extends React.Component {
                 "Accept": "application/json"
             }
         }).then(response => response.json()).then(data => {
+            if (!data.configuration_ro) {
+                return;
+            }
+
             this.setState({
                 system_message: data.configuration_ro.system_message_ro,
                 configuration: data.configuration_ro
@@ -468,9 +475,7 @@ class ActiveChat extends React.Component {
         let questionTemplate = new TextTemplate(questionTemplateText);
         let answerTemplate = new TextTemplate(answerTemplateText);
 
-        let config = this.state.configuration;
-
-        let sysMessageText = config && config.system_message_ro && config.system_message_ro.text;
+        let sysMessageText = (this.state.system_message && this.state.system_message.text) || "";
 
         let toolText = this.state.toolText;
         if (toolText) {
@@ -555,6 +560,21 @@ class ActiveChat extends React.Component {
         this.setState({ "repeat_penalty": e.target.value });
     }
 
+    handleSystemMessageChanged(e) {
+        let newMessage;
+        if (this.state.system_message) {
+            newMessage = JSON.parse(JSON.stringify(this.state.system_message));
+        } else {
+            newMessage = {
+                name: ""
+            }
+        }
+
+        newMessage.text = e.target.value;
+
+        this.setState({ system_message: newMessage });
+    }
+
     render() {
         let textarea = (
             <Form.Control as="textarea" rows={10} placeholder="Enter a prompt here"
@@ -591,7 +611,9 @@ class ActiveChat extends React.Component {
         );
 
         let systemMessageWidget = (
-            <CollapsibleSystemMessage systemMessage={this.state.system_message} />
+            <CollapsibleEditableSystemMessage systemMessage={this.state.system_message} 
+                inProgress={this.state.inProgress}
+                onChange={this.handleSystemMessageChanged} />
         );
 
         let submissionErrorsAlerts = this.state.submissionErrors.map((error, index) =>
