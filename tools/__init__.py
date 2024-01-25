@@ -1,5 +1,7 @@
 import os
+import re
 from .base import llm_tools
+from .api_calls import backend, ApiFunctionCall
 from . import default
 
 try:
@@ -47,7 +49,8 @@ def get_specification(configuration):
             continue
         
         with open(path) as f:
-            spec = f.read()
+            template = f.read()
+            spec = render_template(template)
             tools_with_specs.append((tool, spec))
 
     full_spec = ''
@@ -61,3 +64,59 @@ def get_specification(configuration):
 
         full_spec = full_spec + postfix_template
     return full_spec
+
+
+def render_template(template):
+    def make_pattern(base_pattern, action):
+        return "{% " + base_pattern.format(action=action) + " %}"
+
+    base_pattern = "{action} ([A-Za-z0-9\s\"\!\?\+\-\*\/]+)"
+
+    api_call_pattern = make_pattern(base_pattern, action="apicall")
+    pattern_with_result = make_pattern(base_pattern, action="call_with_result")
+    pattern_with_error = make_pattern(base_pattern, action="call_with_error")
+
+    template = re.sub(api_call_pattern, replace_apicall, template)
+
+    template = re.sub(pattern_with_result, replace_call_with_result, template)
+    return re.sub(pattern_with_error, replace_call_with_error, template)
+
+
+def replace_apicall(match):
+    func = replace(lambda name, args, last_arg: 
+                   backend.render_api_call(ApiFunctionCall(name, args)))
+    return func(match)
+
+
+def replace_call_with_result(match):
+    func = replace(lambda name, args, last_arg: 
+                   backend.render_with_result(ApiFunctionCall(name, args[:-1]), last_arg))
+    return func(match)
+
+
+def replace_call_with_error(match):
+    func = replace(lambda name, args, last_arg:
+                   backend.render_with_error(ApiFunctionCall(name, args[:-1]), last_arg))
+    return func(match)
+
+
+def replace(render):
+    def func(match):
+        s = match.group(1)
+
+        arguments = [arg.strip() for arg in s.split('"') if arg.strip()]
+
+        if not arguments:
+            raise ApiCallParseError('Api call expected to have at least 1 argument (the name)')
+        
+        api_name = arguments[0]
+        api_args = arguments[1:]
+
+        last_arg = api_args[-1]
+        return render(api_name, api_args, last_arg)
+    return func
+
+
+
+class ApiCallParseError(Exception):
+    pass
