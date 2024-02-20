@@ -20,6 +20,7 @@ class RemoteLLM(TokenGenerator):
         url = f"http://{self.host}:{self.port}/completion"
 
         stop_word = "</api>"
+        print(llm_settings)
         payload = {"prompt": prompt, "stream": True, "stop": [stop_word]}
         payload.update(llm_settings)
 

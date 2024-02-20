@@ -105,7 +105,8 @@ class HttpHandler(BaseHTTPRequestHandler):
 
         if self.path == '/clear-context':
             # when running llama.cpp server, clearing context is unnecessary
-            pass
+            self.send_response(200)
+            self.end_headers()
         elif self.path == '/completion':
             self.handle_completion()
         else:
