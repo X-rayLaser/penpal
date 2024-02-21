@@ -200,7 +200,7 @@ class ChatsList extends React.Component {
                         <span className="visually-hidden">Loading...</span>
                     </Spinner>)
                 }
-                {!this.state.loading_chats && <ul>{chatItems}</ul>}
+                {!this.state.loading_chats && <div>{chatItems}</div>}
             </div>
         );
     }
