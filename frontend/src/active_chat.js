@@ -182,6 +182,7 @@ class ActiveChat extends React.Component {
             completion: "",
             inProgress: false,
             contextLoaded: false,
+            loadingConversation: true,
             mode: RAW_MODE,
             
             //llm settings
@@ -221,12 +222,24 @@ class ActiveChat extends React.Component {
         const treeBankUrl = `/chats/treebanks/${id}/`;
         const chatUrl = `/chats/chats/${id}/`;
 
+        let loadedTree = false;
+        let loadedSettings = false;
+
+        const declareLoaded = () => {
+            if (loadedTree && loadedSettings) {
+                this.setState({ loadingConversation: false });
+            }
+        }
+
         fetchTree(treeBankUrl).then(result => {
             this.setState({
                 chatTree: result.tree,
                 treePath: result.path
             });
-        });
+        }).finally(() => {
+            loadedTree = true;
+            declareLoaded();
+        });;
 
         fetch(chatUrl, {
             headers: {
@@ -272,6 +285,9 @@ class ActiveChat extends React.Component {
             }
             
             console.log(data);
+        }).finally(() => {
+            loadedSettings = true;
+            declareLoaded();
         });
 
     }
@@ -619,6 +635,23 @@ class ActiveChat extends React.Component {
         let submissionErrorsAlerts = this.state.submissionErrors.map((error, index) =>
             <Alert key={index} variant="danger" className="mb-3">{error}</Alert>
         );
+
+        let spinner = (
+            <Spinner as="span"
+                     animation="border"
+                     size="lg"
+                     role="status"
+                     aria-hidden="true" />
+        );
+
+        if (this.state.loadingConversation && spinner) {
+            return (
+                <div>
+                    <span>Loading the chat...</span>
+                    {spinner}
+                </div>
+            );
+        }
 
         if (this.hasNoReply()) {
             return (
