@@ -6,7 +6,29 @@ import Form from 'react-bootstrap/Form';
 import Col from 'react-bootstrap/Col';
 import Row from 'react-bootstrap/Row';
 import { Link } from "react-router-dom";
+import { GenericFetchJson } from "./generic_components";
+import { StickyToastContainer, AutoclosableToast } from './generic_components';
 import { withRouter } from "./utils";
+
+
+function ChatItem(props) {
+    return (
+        <Card className="mb-3">
+            <Card.Body>
+                <Card.Text>{props.text}</Card.Text>
+                <Button variant="primary" href={`/#chats/${props.itemId}/`} 
+                        className="me-2" disabled={props.deletion}>
+                    View chat
+                </Button>
+                <Button variant="danger" onClick={e => props.onDelete(props.itemId)} 
+                        disabled={props.deletion}>
+                    Delete
+                </Button>
+                {props.deletion && <div className="mt-2">Deleting an item</div>}
+            </Card.Body>
+        </Card>
+    );
+}
 
 
 class ChatsList extends React.Component {
@@ -17,10 +39,14 @@ class ChatsList extends React.Component {
             chats: [],
             loading_chats: true,
             loading_configs: true,
+            deletionId: null,
             configs: [],
             selected_name: "",
-            name_to_config: {}
+            name_to_config: {},
+            showDeletedToast: false
         };
+
+        this.handleHideDeletedToast = this.handleHideDeletedToast.bind(this);
     }
 
     componentDidMount() {
@@ -60,6 +86,10 @@ class ChatsList extends React.Component {
                 loading_configs: false
             })
         });
+    }
+
+    handleHideDeletedToast() {
+        this.setState({ showDeletedToast: false });
     }
 
     render() {
@@ -103,8 +133,27 @@ class ChatsList extends React.Component {
             });
         }
 
+
+        function handleDelete(id) {
+            const url = `/chats/chats/${id}/`;
+            let fetcher = new GenericFetchJson();
+            fetcher.method = 'delete';
+            fetcher.okRespondWithJson = false;
+
+            self.setState({ deletionId: id });
+            fetcher.performFetch(url).then(response => {
+                let chats = self.state.chats.filter(chat => chat.id !== id);
+                self.setState({ chats, showDeletedToast: true });
+            }).catch(reason => {
+                console.error(`Deletion failure: ${reason}`);
+            }).finally(() => {
+                self.setState({ deletionId: null });
+            });
+        }
+
         const chatItems = this.state.chats.map((chat, index) =>
-            <li key={index}><Link to={`/chats/${chat.id}/`}>{chat.prompt_text}</Link></li>
+            <ChatItem key={index} text={chat.prompt_text} itemId={chat.id} 
+                      onDelete={handleDelete} deletion={chat.id === this.state.deletionId} />
         );
 
         let configs;
@@ -119,6 +168,11 @@ class ChatsList extends React.Component {
 
         return (
             <div>
+                <StickyToastContainer>
+                    <AutoclosableToast show={this.state.showDeletedToast}
+                                            text="Item has been deleted"
+                                            onClose={this.handleHideDeletedToast} />
+                </StickyToastContainer>
                 <Card className="mt-2 mb-2" bg="secondary" text="light">
                     <Card.Body>
                         <Card.Title>Create a new chat</Card.Title>

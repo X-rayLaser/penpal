@@ -10,6 +10,7 @@ class RemoteLLM(TokenGenerator):
 
     def stream_tokens(self, prompt, clear_context=False, llm_settings=None):
         llm_settings = llm_settings or {}
+        clean_llm_settings(llm_settings)
 
         if clear_context:
             url = f"http://{self.host}:{self.port}/clear-context"
@@ -37,6 +38,31 @@ class RemoteLLM(TokenGenerator):
                     yield stop_word
                     break
                 yield entry["content"]
+
+
+def clean_llm_settings(llm_settings):
+    clean_float_field(llm_settings, 'temperature')
+    clean_float_field(llm_settings, 'top_k')
+    clean_float_field(llm_settings, 'top_p')
+    clean_float_field(llm_settings, 'min_p')
+    clean_float_field(llm_settings, 'repeat_penalty')
+    clean_int_field(llm_settings, 'n_predict')
+
+
+def clean_float_field(llm_settings, field):
+    """Make sure that the value of the field is float, if field exists"""
+    clean_any_field(llm_settings, field, float)
+
+
+def clean_int_field(llm_settings, field):
+    """Make sure that the value of the field is int, if field exists"""
+    clean_any_field(llm_settings, field, int)
+
+
+def clean_any_field(llm_settings, field, target_type):
+    """Make sure that the value of the field is of target_type if field exists"""
+    if field in llm_settings:
+        llm_settings[field] = target_type(llm_settings[field])
 
 
 class ClearContextError(Exception):
