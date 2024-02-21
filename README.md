@@ -150,8 +150,7 @@ Replace model with a path to your model file in GGUF format. Use --port option t
 1. Create a new file named local_settings.py in the project directory of your web app (mysite).
 
 2. Add the following configuration to the file:
-
-
+```
 LLM_SETTINGS = {
     "generator": {
         "class": "llm_utils.generators.RemoteLLM",
@@ -161,6 +160,7 @@ LLM_SETTINGS = {
         }
     }
 }
+```
 
 Now your web app is configured to communicate with your local LLM server and use it for token generation.
 
