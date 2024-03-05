@@ -6,6 +6,8 @@ import Form from 'react-bootstrap/Form';
 import Col from 'react-bootstrap/Col';
 import Row from 'react-bootstrap/Row';
 import { Link } from "react-router-dom";
+import Pagination from 'react-bootstrap/Pagination';
+
 import { GenericFetchJson } from "./generic_components";
 import { StickyToastContainer, AutoclosableToast } from './generic_components';
 import { withRouter } from "./utils";
@@ -31,6 +33,29 @@ function ChatItem(props) {
 }
 
 
+function PaginationWidget(props) {
+    let items = [];
+    for (let number = 1; number <= props.numPages; number++) {
+        items.push(
+            <Pagination.Item key={number} active={number === props.activePage} 
+                onClick={e => props.onPageClick(number)}>
+            {number}
+            </Pagination.Item>,
+        );
+    }
+
+    if (props.numPages < 2) {
+        return (<div></div>);
+    }
+
+    return (
+        <div>
+            <Pagination>{items}</Pagination>
+        </div>
+    );
+}
+
+
 class ChatsList extends React.Component {
     constructor(props) {
         super(props);
@@ -43,27 +68,20 @@ class ChatsList extends React.Component {
             configs: [],
             selected_name: "",
             name_to_config: {},
-            showDeletedToast: false
+            showDeletedToast: false,
+            numPages: 1,
+            activePage: 1
         };
 
         this.handleHideDeletedToast = this.handleHideDeletedToast.bind(this);
+        this.handleCreateChat = this.handleCreateChat.bind(this);
+        this.handleDeleteChat = this.handleDeleteChat.bind(this);
+        this.handleChangeConfiguration = this.handleChangeConfiguration.bind(this);
+        this.handlePageClick = this.handlePageClick.bind(this);
     }
 
     componentDidMount() {
-        fetch('/chats/chats/', {
-            method: "GET",
-            headers: {
-                "Content-Type": "application/json",
-                "Accept": "application/json"
-            }
-        }).then(response => {
-            return response.json();
-        }).then(data => {
-            this.setState({
-                chats: data,
-                loading_chats: false
-            })
-        });
+        this.loadPage();
 
         fetch('/chats/configurations/', {
             method: "GET",
@@ -88,72 +106,114 @@ class ChatsList extends React.Component {
         });
     }
 
+    loadPage(pageNo) {
+        pageNo = pageNo || 1;
+        let url;
+        if (pageNo) {
+            url = `/chats/chats/?page=${pageNo}`;
+        } else {
+            url = `/chats/chats/`;
+        }
+
+        this.setState({
+            loading_chats: true
+        });
+
+        fetch(url, {
+            method: "GET",
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        }).then(response => {
+            return response.json();
+        }).then(data => {
+            let results = data.results;
+            this.setState({
+                chats: results,
+                loading_chats: false,
+                activePage: pageNo
+            });
+
+            if (pageNo === 1) {
+                let pageSize = results.length;
+                let numPages = Math.ceil(data.count / pageSize);
+                this.setState({ numPages });                
+            }
+        });
+    }
+
+    handlePageClick(pageNo) {
+        console.log(`pageno ${pageNo}`)
+        this.loadPage(pageNo);
+    }
+
     handleHideDeletedToast() {
         this.setState({ showDeletedToast: false });
     }
 
-    render() {
+    handleCreateChat(e) {
         let self = this;
-        function clickHandler(e) {
-            self.setState({
-                buttonDisabled: true
-            });
 
-            let body = {};
+        self.setState({
+            buttonDisabled: true
+        });
 
-            if (self.state.selected_name) {
-                let config = self.state.name_to_config[self.state.selected_name];
-                if (!config) {
-                    console.error(`Configuration lookup failed on key ${self.state.selected_name}`);
-                } else {
-                    body.configuration = config.id;
-                }
+        let body = {};
+
+        if (self.state.selected_name) {
+            let config = self.state.name_to_config[self.state.selected_name];
+            if (!config) {
+                console.error(`Configuration lookup failed on key ${self.state.selected_name}`);
+            } else {
+                body.configuration = config.id;
             }
-
-            fetch('/chats/chats/', {
-                method: 'POST',
-                body: JSON.stringify(body),
-                headers: {
-                    "Content-Type": "application/json",
-                    "Accept": "application/json"
-                }
-            }).then(response => {
-                return response.json();
-            }).then(data => {
-                console.log(data);
-                self.props.router.navigate(`/chats/${data.id}/`);
-            });
         }
 
-        function changeConfigurationHandler(e) {
-            let name = e.target.value;
+        fetch('/chats/chats/', {
+            method: 'POST',
+            body: JSON.stringify(body),
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        }).then(response => {
+            return response.json();
+        }).then(data => {
+            console.log(data);
+            self.props.router.navigate(`/chats/${data.id}/`);
+        });
+    }
 
-            self.setState({
-                selected_name: name
-            });
-        }
+    handleDeleteChat(id) {
+        const url = `/chats/chats/${id}/`;
+        let fetcher = new GenericFetchJson();
+        fetcher.method = 'delete';
+        fetcher.okRespondWithJson = false;
 
+        this.setState({ deletionId: id });
+        fetcher.performFetch(url).then(response => {
+            let chats = this.state.chats.filter(chat => chat.id !== id);
+            this.setState({ chats, showDeletedToast: true });
+        }).catch(reason => {
+            console.error(`Deletion failure: ${reason}`);
+        }).finally(() => {
+            this.setState({ deletionId: null });
+        });
+    }
 
-        function handleDelete(id) {
-            const url = `/chats/chats/${id}/`;
-            let fetcher = new GenericFetchJson();
-            fetcher.method = 'delete';
-            fetcher.okRespondWithJson = false;
+    handleChangeConfiguration(e) {
+        let name = e.target.value;
 
-            self.setState({ deletionId: id });
-            fetcher.performFetch(url).then(response => {
-                let chats = self.state.chats.filter(chat => chat.id !== id);
-                self.setState({ chats, showDeletedToast: true });
-            }).catch(reason => {
-                console.error(`Deletion failure: ${reason}`);
-            }).finally(() => {
-                self.setState({ deletionId: null });
-            });
-        }
+        this.setState({
+            selected_name: name
+        });
+    }
 
+    render() {
         const chatItems = this.state.chats.map((chat, index) =>
             <ChatItem key={index} text={chat.prompt_text} itemId={chat.id} 
-                      onDelete={handleDelete} deletion={chat.id === this.state.deletionId} />
+                      onDelete={this.handleDeleteChat} deletion={chat.id === this.state.deletionId} />
         );
 
         let configs;
@@ -180,12 +240,12 @@ class ChatsList extends React.Component {
                             <Row>
                                 <Col xs={10}>
                                     <Form.Select aria-label="Configuration selection" value={this.state.selected_name}
-                                                 onChange={changeConfigurationHandler}>
+                                                 onChange={this.handleChangeConfiguration}>
                                         {configs}
                                     </Form.Select>
                                 </Col>
                                 <Col>
-                                    <Button variant="light" onClick={clickHandler} 
+                                    <Button variant="light" onClick={this.handleCreateChat} 
                                             disabled={this.state.buttonDisabled || this.state.loading_configs}>
                                         Create
                                     </Button>
@@ -194,13 +254,30 @@ class ChatsList extends React.Component {
                         </Form>
                     </Card.Body>
                 </Card>
-                <h4>My chats</h4>
                 {
-                    this.state.loading_chats && (<Spinner animation="border" role="status">
-                        <span className="visually-hidden">Loading...</span>
-                    </Spinner>)
+                    this.state.loading_chats && (
+                        <Spinner animation="border" role="status">
+                            <span className="visually-hidden">Loading...</span>
+                        </Spinner>
+                    )
                 }
-                {!this.state.loading_chats && <div>{chatItems}</div>}
+                {
+                    !this.state.loading_chats && chatItems.length > 0 && (
+                        <div>
+                            <h4>My chats</h4>
+                            <PaginationWidget 
+                                numPages={this.state.numPages}
+                                activePage={this.state.activePage}
+                                onPageClick={this.handlePageClick} />
+                                
+                            <div>{chatItems}</div>
+                            <PaginationWidget 
+                                numPages={this.state.numPages}
+                                activePage={this.state.activePage}
+                                onPageClick={this.handlePageClick} />
+                        </div>
+                    )
+                }
             </div>
         );
     }

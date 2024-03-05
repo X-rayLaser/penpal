@@ -3,6 +3,7 @@ from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import viewsets
+from rest_framework import generics
 from django.http.response import StreamingHttpResponse, HttpResponseNotAllowed, HttpResponseBadRequest
 from django.views.decorators.csrf import csrf_exempt
 from .models import SystemMessage, Preset, Configuration, Chat, Message
@@ -22,6 +23,8 @@ from tools.api_calls import (
     ApiFunctionCall,
     ApiCallNotFoundError
 )
+
+from .pagination import DefaultPagination
 
 
 class SystemMessageViewSet(viewsets.ModelViewSet):
@@ -72,19 +75,10 @@ def generate_reply(request):
     return generate_completion(request)
 
 
-@api_view(['GET', 'POST'])
-def chat_list(request):
-    if request.method == 'GET':
-        chats = Chat.objects.all()
-        serializer = ChatSerializer(chats, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
-    
-    serializer = ChatSerializer(data=request.data)
-    if serializer.is_valid():
-        serializer.save()
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-    
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+class ChatList(generics.ListCreateAPIView):
+    queryset = Chat.objects.all()
+    serializer_class = ChatSerializer
+    pagination_class = DefaultPagination
 
 
 @api_view(['GET', 'DELETE'])
