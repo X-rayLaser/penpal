@@ -1,23 +1,18 @@
 import React from 'react';
 import Form from 'react-bootstrap/Form';
-import Col from 'react-bootstrap/Col';
-import Row from 'react-bootstrap/Row';
-import Accordion from 'react-bootstrap/Accordion';
 import Button from 'react-bootstrap/Button';
 import Spinner from 'react-bootstrap/Spinner';
 import Card from 'react-bootstrap/Card';
 import Pagination from 'react-bootstrap/Pagination';
 import Alert from 'react-bootstrap/Alert';
-import { streamJsonResponse } from './utils';
+import ButtonGroup from 'react-bootstrap/ButtonGroup';
 import { withRouter, generateResponse } from "./utils";
 import { 
     fetchTree, addNode, addMessage, selectThread, appendThread, collapseThread,
     getNodeById, getThreadMessages, getConversationText, isHumanText
 } from './tree';
 import { CollapsibleLLMSettings } from './presets';
-import { 
-    CollapsibleSystemMessage, CollapsibleEditableSystemMessage
-} from './components';
+import { CollapsibleEditableSystemMessage } from './components';
 import { GenericFetchJson } from './generic_components';
 
 class TextTemplate {
@@ -63,55 +58,122 @@ function traverseTree(tree, path) {
 }
 
 
-function Message(props) {
-    let pathItem = props.pathItem;
-    let message = props.message;
-    let numSiblings = message.numSiblings;
-    let active = pathItem.branchIndex + 1;
-    let items = [];
-    
-    let onRegenerate = props.onRegenerate;
+class Message extends React.Component {
+    constructor(props) {
+        super(props);
 
-    function getHandler(key) {
-        return e => {
-            if (key !== active) {
-                let newBranchId = key - 1;
-                props.onBranchSwitch(message, newBranchId);
+        this.state = {
+            medium: 'html_view'
+        };
+
+        this.handleDebugView = this.handleDebugView.bind(this);
+        this.handleTextView = this.handleTextView.bind(this);
+        this.handleHtmlView = this.handleHtmlView.bind(this);
+    }
+
+    handleDebugView() {
+        this.setState({
+            medium: 'tokens_view'
+        });
+    }
+
+    handleTextView() {
+        this.setState({
+            medium: 'text_view'
+        });
+    }
+
+    handleHtmlView() {
+        this.setState({
+            medium: 'html_view'
+        });
+    }
+
+    render() {
+        let props = this.props;
+        let pathItem = props.pathItem;
+        let message = props.message;
+        let numSiblings = message.numSiblings;
+        let active = pathItem.branchIndex + 1;
+        let items = [];
+        
+        let onRegenerate = props.onRegenerate;
+
+        function getHandler(key) {
+            return e => {
+                if (key !== active) {
+                    let newBranchId = key - 1;
+                    props.onBranchSwitch(message, newBranchId);
+                }
             }
         }
-    }
-    
-    for (let i = 1; i <= numSiblings; i++) {
-        const handler = getHandler(i);
-        items.push(
-            <Pagination.Item key={i} active={i === active} onClick={handler}>
-            {i}
-            </Pagination.Item>
+        
+        for (let i = 1; i <= numSiblings; i++) {
+            const handler = getHandler(i);
+            items.push(
+                <Pagination.Item key={i} active={i === active} onClick={handler}>
+                {i}
+                </Pagination.Item>
+            );
+        }
+
+        let innerHtml = {
+            __html: message.data.html || message.data.text
+        };
+
+        let cleanText = message.data.clean_text || message.data.text;
+
+        let prerenderedHtml = <pre dangerouslySetInnerHTML={innerHtml} style={{whiteSpace: 'break-spaces'}} />;
+
+        let element;
+
+        if (this.state.medium === 'tokens_view') {
+            element = <div>{message.data.text}</div>;
+        } else if (this.state.medium === 'text_view') {
+            element = <div>{cleanText}</div>;
+        } else {
+            element = prerenderedHtml;
+        }
+
+        let bg = props.bg;
+        let buttonVariant = bg === 'secondary' || bg === 'dark' ? 'outline-light' : 'outline-secondary';
+
+        return (        
+            <Card bg={props.bg} text={props.color} className="mb-3" style={{color:'red'}}>
+                <Card.Header>{props.header}</Card.Header>
+                <Card.Body>
+                    <ButtonGroup className="mb-3" size="sm">
+                        <Button variant={buttonVariant} onClick={this.handleDebugView}
+                            active={this.state.medium === 'tokens_view'}
+                        >
+                            Raw view
+                        </Button>
+                        <Button variant={buttonVariant} onClick={this.handleTextView}
+                            active={this.state.medium === 'text_view'}
+                        >
+                            Text view
+                        </Button>
+                        <Button variant={buttonVariant} onClick={this.handleHtmlView}
+                            active={this.state.medium === 'html_view'}
+                        >
+                            HTML view
+                        </Button>
+                    </ButtonGroup>
+                    {element}
+                </Card.Body>
+                <Card.Footer>
+                    <div>
+                        <Pagination size="sm">{items}</Pagination>
+                    </div>
+
+                    {onRegenerate && 
+                        <Button onClick={e => onRegenerate(pathItem) }>Regenerate</Button>
+                    }
+                </Card.Footer>
+            </Card>
         );
     }
-
-    let innerHtml = {
-        __html: message.data.html || message.data.text
-    };
-    
-    return (        
-        <Card bg={props.bg} text={props.color} className="mb-3" style={{color:'red'}}>
-            <Card.Header>{props.header}</Card.Header>
-            <Card.Body>
-                <pre dangerouslySetInnerHTML={innerHtml} style={{whiteSpace: 'break-spaces'}} />
-            </Card.Body>
-            <Card.Footer>
-                <div>
-                    <Pagination size="sm">{items}</Pagination>
-                </div>
-
-                {onRegenerate && 
-                    <Button onClick={e => onRegenerate(pathItem) }>Regenerate</Button>
-                }
-            </Card.Footer>
-        </Card>
-    );
-}
+};
 
 
 function HumanMessage(props) {

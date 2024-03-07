@@ -48,7 +48,9 @@ export function buildTree(root) {
 }
 
 function fixBranch(node) {
-    let fixedNode = new Node(node.id, { text: node.text, html: node.html });
+    let fixedNode = new Node(node.id, { 
+        text: node.text, clean_text: node.clean_text, html: node.html
+    });
     for (let i = 0; i < node.replies.length; i++) {
         let fixedChild = fixBranch(node.replies[i]);
         fixedNode.addChild(fixedChild);
@@ -75,6 +77,7 @@ export function addNode(tree, nodeId, message) {
     let parentNode = getNodeById(treeCopy, nodeId);
     let data = {
         text: message.text,
+        clean_text: message.clean_text,
         html: message.html
     };
 
@@ -91,6 +94,7 @@ function addNodeUnderRoot(tree, message) {
 
     let data = {
         text: message.text,
+        clean_text: message.clean_text,
         html: message.html
     };
     let childNode = new Node(message.id, data);

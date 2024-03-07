@@ -1,6 +1,8 @@
+import re
+import markdown
 from rest_framework import serializers
 from .models import SystemMessage, Preset, Configuration, Chat, Message
-import markdown
+from tools.api_calls import backend
 
 
 class SystemMessageSerializer(serializers.ModelSerializer):
@@ -56,14 +58,30 @@ class ChatSerializer(serializers.ModelSerializer):
 class MessageSerializer(serializers.ModelSerializer):
     chat = serializers.PrimaryKeyRelatedField(many=False, required=False, queryset=Chat.objects.all())
     html = serializers.SerializerMethodField()
+    clean_text = serializers.SerializerMethodField()
     
     class Meta:
         model = Message
-        fields = ['id', 'text', 'html', 'date_time', 'generation_details', 'parent', 'replies', 'chat']
+        fields = ['id', 'text', 'clean_text', 'html', 'date_time',
+                  'generation_details', 'parent', 'replies', 'chat']
         read_only_fields = ['replies']
 
+    def get_clean_text(self, obj):
+        open_tag = backend.open_apicall_tag
+        tags_to_remove = [(backend.get_apicall_open_tag(), backend.get_apicall_close_tag()),
+                          (backend.get_result_open_tag(), backend.get_result_close_tag()),
+                          (backend.get_error_open_tag(), backend.get_error_close_tag())]
+
+        output = obj.text
+        for open_tag, close_tag in tags_to_remove:
+            pattern = re.compile(f'{open_tag}.*{close_tag}')
+            output = pattern.sub("", output)
+            output = output.replace(open_tag, "").replace(close_tag, "")
+        
+        return output
+
     def get_html(self, obj):
-        return markdown.markdown(obj.text, extensions=['fenced_code'])
+        return markdown.markdown(self.get_clean_text(obj), extensions=['fenced_code'])
 
     def create(self, validated_data):
         print(validated_data)
