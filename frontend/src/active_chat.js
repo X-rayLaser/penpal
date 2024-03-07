@@ -6,6 +6,7 @@ import Card from 'react-bootstrap/Card';
 import Pagination from 'react-bootstrap/Pagination';
 import Alert from 'react-bootstrap/Alert';
 import ButtonGroup from 'react-bootstrap/ButtonGroup';
+import Badge from 'react-bootstrap/Badge';
 import { withRouter, generateResponse } from "./utils";
 import { 
     fetchTree, addNode, addMessage, selectThread, appendThread, collapseThread,
@@ -256,6 +257,7 @@ class ActiveChat extends React.Component {
             n_predict: 1024,
 
             toolText: "",
+            tools: [],
             submissionErrors: [],
             generationError: ""
         };
@@ -312,13 +314,17 @@ class ActiveChat extends React.Component {
                 return;
             }
 
+            let config = data.configuration_ro;
+            let tools = (config && config.tools) || [];
+
             this.setState({
-                system_message: data.configuration_ro.system_message_ro,
-                configuration: data.configuration_ro
+                system_message: config.system_message_ro,
+                configuration: config,
+                tools
             });
 
-            let preset = data.configuration_ro.preset_ro;
-            console.log("preset:", preset, "data", data, "sys message", data.configuration_ro.system_message_ro);
+            let preset = config.preset_ro;
+            console.log("preset:", preset, "data", data, "sys message", config.system_message_ro);
             if (preset) {
                 this.setState({
                     temperature: preset.temperature,
@@ -329,10 +335,6 @@ class ActiveChat extends React.Component {
                     n_predict: preset.n_predict
                 });
             }
-
-            let config = data.configuration_ro;
-
-            let tools = (config && config.tools) || [];
 
             if (tools.length > 0) {
                 fetch(`/chats/tools-spec/?conf_id=${config.id}`).then(response => 
@@ -715,12 +717,17 @@ class ActiveChat extends React.Component {
             );
         }
 
+        let toolItems = this.state.tools.map((toolName, index) => 
+            <Badge key={index} variant="primary">{toolName}</Badge>
+        );
+
         if (this.hasNoReply()) {
             return (
                 <div>
-                    {radio}
                     {settingsWidget}
                     {this.state.system_message && systemMessageWidget}
+                    {this.state.tools.length > 0 && <div className="mt-3 mb-3">Tools used by LLM: {toolItems}</div>}
+                    {radio}
                     <ConversationTree tree={this.state.chatTree} treePath={this.state.treePath}
                             onBranchSwitch={this.handleBranchSwitch} />
                     {this.state.generationError && <Alert variant="danger">
@@ -753,9 +760,10 @@ class ActiveChat extends React.Component {
         }
         return (
             <div>
-                {radio}
                 {settingsWidget}
                 {this.state.system_message && systemMessageWidget}
+                {this.state.tools.length > 0 && <div className="mt-3 mb-3">Tools used by LLM: {toolItems}</div>}
+                {radio}
                 <ConversationTree tree={this.state.chatTree} treePath={this.state.treePath}
                         onBranchSwitch={this.handleBranchSwitch}
                         onRegenerate={this.handleRegenerate} />
