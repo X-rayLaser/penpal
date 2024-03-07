@@ -14,20 +14,47 @@ import { withRouter } from "./utils";
 
 
 function ChatItem(props) {
+    const len = 200;
+    let prefix = props.text.length < len ? props.text : props.text.substring(0, len) + "...";
+    let oldDate = new Date(props.createdTime);
+    let nowDate = new Date();
+
+    let deltaSeconds = Math.round((nowDate - oldDate) / 1000);
+    let deltaMinutes = Math.round(deltaSeconds / 60);
+    let deltaHours = Math.round(deltaSeconds / 3600);
+    let deltaDays = Math.round(deltaHours / 24);
+    let timeAgo;
+
+    if (deltaDays > 0) {
+        timeAgo = `${deltaDays} days ago`;
+    } else if (deltaHours > 0) {
+        timeAgo = `${deltaHours} hours ago`;
+    } else if (deltaMinutes > 0) {
+        timeAgo = `${deltaMinutes} minutes ago`;
+    } else {
+        timeAgo = `${deltaSeconds} seconds ago`;
+    }
+
     return (
         <Card className="mb-3">
             <Card.Body>
-                <Card.Text>{props.text}</Card.Text>
-                <Button variant="primary" href={`/#chats/${props.itemId}/`} 
-                        className="me-2" disabled={props.deletion}>
-                    View chat
-                </Button>
-                <Button variant="danger" onClick={e => props.onDelete(props.itemId)} 
-                        disabled={props.deletion}>
-                    Delete
-                </Button>
-                {props.deletion && <div className="mt-2">Deleting an item</div>}
+                <Card.Text className="float-start">{prefix}</Card.Text>
+                <div className="float-end">
+                    <Button variant="primary" href={`/#chats/${props.itemId}/`} 
+                            className="me-2" disabled={props.deletion}>
+                        View chat
+                    </Button>
+                    <Button variant="danger" onClick={e => props.onDelete(props.itemId)} 
+                            disabled={props.deletion}>
+                        Delete
+                    </Button>
+                    </div>
             </Card.Body>
+
+            <Card.Footer className="text-muted">
+                <div>{timeAgo}</div>
+                {props.deletion && <div className="mt-2">Deleting an item</div>}
+            </Card.Footer>
         </Card>
     );
 }
@@ -212,7 +239,7 @@ class ChatsList extends React.Component {
 
     render() {
         const chatItems = this.state.chats.map((chat, index) =>
-            <ChatItem key={index} text={chat.prompt_text} itemId={chat.id} 
+            <ChatItem key={index} text={chat.prompt_text} createdTime={chat.date_time} itemId={chat.id} 
                       onDelete={this.handleDeleteChat} deletion={chat.id === this.state.deletionId} />
         );
 

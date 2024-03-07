@@ -72,6 +72,8 @@ class Chat(models.Model):
     human = models.ForeignKey(User, related_name='chats', blank=True, null=True,
                               on_delete=models.CASCADE)
 
+    date_time = models.DateTimeField(auto_now_add=True, blank=True)
+
 
 class Message(models.Model):
     text = models.CharField(max_length=4096)

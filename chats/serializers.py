@@ -46,7 +46,7 @@ class ChatSerializer(serializers.ModelSerializer):
     class Meta:
         model = Chat
         fields = ['id', 'configuration', 'configuration_ro', 'system_message',
-                  'system_message_ro', 'prompt_text', 'human']
+                  'system_message_ro', 'prompt_text', 'human', 'date_time']
 
     def update(self, instance, validated_data):
         # todo: consider other approaches
