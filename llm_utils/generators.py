@@ -40,6 +40,32 @@ class RemoteLLM(TokenGenerator):
                 yield entry["content"]
 
 
+class ManagedRemoteLLM(RemoteLLM):
+    """LLM server must be stateful and it must implement these routes:
+        - /clear-context
+        - /completion
+        - /download-llm
+        - /list-llms
+        - /configure-llm
+        - /start-llm
+        - /stop-llm
+    """
+    def install_model(self, llm_store, vendor, llm_name):
+        """Downloads/installs a LLM on the server"""
+
+    def list_installed(self):
+        """Returns a list of models installed on the LLM server"""
+
+    def configure_llm(self, config):
+        """Passes the LLM configuration to the server"""
+
+    def start_llm(self):
+        """Start/restart LLM specified by configure_llm method which must be called beforehand"""
+
+    def stop_llm(self):
+        """Stop running LLM on the server"""
+
+
 def clean_llm_settings(llm_settings):
     clean_float_field(llm_settings, 'temperature')
     clean_float_field(llm_settings, 'top_k')

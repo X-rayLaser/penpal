@@ -2,3 +2,4 @@ Django<5
 requests
 djangorestframework
 markdown
+huggingface_hub

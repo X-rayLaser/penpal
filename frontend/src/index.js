@@ -18,6 +18,7 @@ import { TextCompletionPage } from './text_completion';
 import { SystemMessageList } from './system_messages';
 import { PresetsPage } from './presets';
 import { ConfigurationsPage } from './configurations';
+import { HuggingfaceHubRepositoryViewer } from './llm_models';
 
 
 class App extends React.Component {
@@ -33,6 +34,7 @@ class App extends React.Component {
 
                         <Nav.Link href="#my-system-messages">System messages</Nav.Link>
                         <Nav.Link href="#presets">Presets</Nav.Link>
+                        <Nav.Link href="#models">Models</Nav.Link>
                     </Nav>
                     </Container>
                 </Navbar>
@@ -77,6 +79,10 @@ const router = createHashRouter([
                 path: "/my-system-messages/",
                 element: <SystemMessageList />
             },
+            {
+                path: "/models",
+                element: <HuggingfaceHubRepositoryViewer />
+            }
         ]
     }
 ]);
