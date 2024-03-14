@@ -73,23 +73,26 @@ class LLMManager:
         self.printing_thread.start()
 
     def start_download(self, repo_id, file_name):
-        download_id = uuid.uuid4()
-        download_status = {
+        download_id = uuid.uuid4().hex
+        download_info = {
+            'id': download_id,
+            'repo_id': repo_id,
+            'file_name': file_name,
             'finished': False,
             'errors': []
         }
-        self.downloads[download_id] = download_status
+        self.downloads[download_id] = download_info
 
-        download = DownloadThread(download_status, repo_id, file_name)
+        download = DownloadThread(download_info, repo_id, file_name)
         self.download_threads.append(download)
         download.start()
         return download_id
 
 
 class DownloadThread(threading.Thread):
-    def __init__(self, download_status, repo_id, file_name):
+    def __init__(self, download_info, repo_id, file_name):
         super().__init__()
-        self.download_status = download_status
+        self.download_info = download_info
         self.repo_id = repo_id
         self.file_name = file_name
 
@@ -97,7 +100,7 @@ class DownloadThread(threading.Thread):
 
     def run(self) -> None:
         time.sleep(10)
-        self.download_status['finished'] = True
+        self.download_info['finished'] = True
 
 
 class PrintingThread(threading.Thread):
@@ -146,7 +149,15 @@ class HttpHandler(BaseHTTPRequestHandler):
             self.handle_download()
         elif self.path == '/download-status':
             self.handle_download_status()
-        elif self.path == '/downloads-in-progress':
+        else:
+            print("Unsupprted path", self.path)
+            self.send_response(404)
+            self.end_headers()
+
+    def do_GET(self):
+        self.protocol_version = 'HTTP/1.0'
+
+        if self.path == '/downloads-in-progress':
             self.handle_downloads_inprogress()
         elif self.path == '/list-models':
             self.handle_list_models()
@@ -199,8 +210,8 @@ class HttpHandler(BaseHTTPRequestHandler):
         self.send_json_response(status_code, response_data)
 
     def handle_downloads_inprogress(self):
-        in_progress = [id for id, status in llm_manager.downloads.items()
-                       if not status['finished']]
+        in_progress = [info for info in llm_manager.downloads.values()
+                       if not info['finished']]
         self.send_json_response(status_code=200, response_data=in_progress)
 
     def handle_list_models(self):

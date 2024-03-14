@@ -24,7 +24,7 @@ def start_download(repo_id, file_name):
 
 
 def get_downloads_in_progress():
-    """Show ids of all downloads in progress"""
+    """Show information about all downloads in progress"""
     return token_generator.downloads_in_progress()
 
 

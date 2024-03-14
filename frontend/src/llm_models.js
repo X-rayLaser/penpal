@@ -10,7 +10,83 @@ import DropdownButton from 'react-bootstrap/DropdownButton';
 import Alert from 'react-bootstrap/Alert';
 import Badge from 'react-bootstrap/Badge';
 import Stack from 'react-bootstrap/Stack';
+import Spinner from 'react-bootstrap/Spinner';
+import { GenericFetchJson } from './generic_components';
 import { withRouter } from "./utils";
+
+
+class ModelControlPanel extends React.Component {
+    constructor(props) {
+        super(props);
+        this.state = {
+            downloads: [],
+            installedModels: []
+        };
+
+        this.intervalMilliSecs = 5000;
+        this.intervalId = null;
+        this.handleStartDownload = this.handleStartDownload.bind(this);
+    }
+
+    componentDidMount() {
+        this.intervalId = setInterval(() => {
+            this.syncDownloadsInProgress();
+            this.syncInstalledModels();
+        }, this.intervalMilliSecs);
+    }
+
+    componentWillUnmount() {
+        clearInterval(this.intervalId);
+    }
+
+    syncDownloadsInProgress() {
+        this.syncStateLists('/modelhub/downloads-in-progress/', "downloads");
+    }
+
+    syncInstalledModels() {
+        this.syncStateLists('/modelhub/installed-models/', "installedModels");
+    }
+
+    syncStateLists(url, listKey) {
+        fetch(url).then(response => response.json()).then(data => {
+            let patch = {};
+            patch[listKey] = data
+            this.setState(patch);
+        });
+
+    }
+
+    handleStartDownload(repoId, fileName) {
+        console.log("starting download:", repoId, fileName);
+        const url = '/modelhub/start-download/'
+        let fetcher = new GenericFetchJson();
+        fetcher.method = "POST";
+        fetcher.body = {
+            repo_id: repoId,
+            file_name: fileName
+        };
+
+        fetcher.performFetch(url);
+    }
+    render() {
+        let downloads = this.state.downloads;
+        let downloadsInProgress = downloads.map((modelInfo, index) => 
+            <ListGroup.Item variant="secondary">
+                {`Installing a model: ${modelInfo.repo_id}/${modelInfo.file_name}... `}
+                <Spinner animation="border" role="status">
+                </Spinner>
+            </ListGroup.Item>
+        );
+        return (
+            <div>
+                {downloadsInProgress.length > 0 && (
+                    <ListGroup>{downloadsInProgress}</ListGroup>
+                )}
+                <HuggingfaceHubRepositoryViewer onStartDownload={this.handleStartDownload} />
+            </div>
+        );
+    }
+};
 
 
 class HuggingfaceHubRepositoryViewer extends React.Component {
@@ -117,7 +193,22 @@ class HuggingfaceHubRepositoryViewer extends React.Component {
                 let licenses = item.licenses.join(", ");
                 let datasets = item.datasets.join(", ");
                 let papers = item.papers.join(", ");
-                let tags = item.tags.map(tag => <Badge bg="success">{tag}</Badge>);
+                let tags = item.tags.map((tag, tagIndex) => 
+                    <Badge key={tagIndex} bg="success">{tag}</Badge>
+                );
+
+                let filePath = null;
+                let fileSize = null;
+
+                if (this.state.selectedFileIndex) {
+                    filePath = this.state.ggufFiles[this.state.selectedFileIndex].path;
+                    fileSize = this.state.ggufFiles[this.state.selectedFileIndex].size;
+                }
+
+                const handleStartDownload = e => {
+                    this.props.onStartDownload(item.id, filePath);
+                }
+
                 itemBody = (
                     <div>
                         {licenses.length > 0 && <div>Licenses: {licenses}</div>}
@@ -136,8 +227,8 @@ class HuggingfaceHubRepositoryViewer extends React.Component {
                             <div>
                                 <div className="mb-3">
                                     <span>A model to be downloaded: </span>
-                                    <span>{this.state.ggufFiles[this.state.selectedFileIndex].path} </span>
-                                    <span>{renderSize(this.state.ggufFiles[this.state.selectedFileIndex].size)}</span>
+                                    <span>{filePath} </span>
+                                    <span>{`(${fileSize})`}</span>
                                 </div>
 
                                 <Alert variant="warning" className="mb-3">
@@ -147,7 +238,7 @@ class HuggingfaceHubRepositoryViewer extends React.Component {
                                 <Alert variant="warning" className="mb-3">
                                     Make sure you have enough disk space on LLM server to download a chosen model.
                                 </Alert>
-                                <Button variant="secondary">Start download</Button>
+                                <Button variant="secondary" onClick={handleStartDownload}>Start download</Button>
                             </div>
                         )}
                     </div>
@@ -193,8 +284,8 @@ class HuggingfaceHubRepositoryViewer extends React.Component {
 }
 
 
-HuggingfaceHubRepositoryViewer = withRouter(HuggingfaceHubRepositoryViewer);
+ModelControlPanel = withRouter(ModelControlPanel);
 
 export {
-    HuggingfaceHubRepositoryViewer
+    ModelControlPanel
 }

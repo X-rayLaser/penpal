@@ -18,7 +18,7 @@ import { TextCompletionPage } from './text_completion';
 import { SystemMessageList } from './system_messages';
 import { PresetsPage } from './presets';
 import { ConfigurationsPage } from './configurations';
-import { HuggingfaceHubRepositoryViewer } from './llm_models';
+import { ModelControlPanel } from './llm_models';
 
 
 class App extends React.Component {
@@ -81,7 +81,7 @@ const router = createHashRouter([
             },
             {
                 path: "/models",
-                element: <HuggingfaceHubRepositoryViewer />
+                element: <ModelControlPanel />
             }
         ]
     }

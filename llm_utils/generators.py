@@ -51,25 +51,25 @@ class ManagedRemoteLLM(RemoteLLM):
         - /start-llm
         - /stop-llm
     """
-    def download_model(self, repo_id, file_name, llm_store='huggingface'):
+    def start_download(self, repo_id, file_name, llm_store='huggingface'):
         """Begins downloading a LLM on the server and returns download id"""
-        url = "/download-llm"
+        url = self.make_full_url("/download-llm")
         body = dict(repo_id=repo_id, file_name=file_name)
         return self.post_json(url, body)['download_id']
 
     def download_status(self, id):
-        url = "/download-status"
+        url = self.make_full_url("/download-status")
         body = dict(download_id=id)
         return self.post_json(url, body)
 
     def downloads_in_progress(self):
-        url = "/downloads-in-progress"
+        url = self.make_full_url("/downloads-in-progress")
         resp = requests.get(url)
         return resp.json()
 
     def list_installed_models(self):
         """Returns a list of models installed on the LLM server"""
-        url = "/list-models"
+        url = self.make_full_url("/list-models")
         resp = requests.get(url)
         return resp.json()
 
@@ -81,6 +81,9 @@ class ManagedRemoteLLM(RemoteLLM):
 
     def stop_llm(self):
         """Stop running LLM on the server"""
+
+    def make_full_url(self, path):
+        return f"http://{self.host}:{self.port}{path}"
 
     def post_json(self, url, body):
         headers = {'Content-Type': 'application/json'}

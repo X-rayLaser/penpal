@@ -72,7 +72,7 @@ def list_gguf_files(request):
 @api_view(['POST'])
 def start_download(request):
     repo_id = request.data['repo_id']
-    file_name = request.data['file_path']
+    file_name = request.data['file_name']
     download_id = llm_utils.start_download(repo_id, file_name)
     return Response({'download_id': download_id})
 
@@ -83,14 +83,14 @@ def get_download_status(request):
     if download_id is None:
         return Response({}, status=status.HTTP_400_BAD_REQUEST)
 
-    return llm_utils.get_download_status(download_id)
+    return Response(llm_utils.get_download_status(download_id))
 
 
 @api_view(['GET'])
 def get_downloads_in_progress(request):
-    return llm_utils.get_downloads_in_progress()
+    return Response(llm_utils.get_downloads_in_progress())
 
 
 @api_view(['GET'])
 def get_installed_models(request):
-    return llm_utils.get_installed_models()
+    return Response(llm_utils.get_installed_models())
