@@ -2,6 +2,9 @@ import subprocess
 import threading
 import requests
 import time
+import json
+import uuid
+import os
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 
@@ -15,6 +18,9 @@ class LLMManager:
 
         self.process = None
         self.printing_thread = None
+        self.download_threads = []
+
+        self.downloads = {}
 
     def setup(self, exec_path, model_path, host, port, num_gpu_layers=0, context_size=512):
         self.executable_path = exec_path
@@ -66,6 +72,33 @@ class LLMManager:
         self.printing_thread = PrintingThread(self.process)
         self.printing_thread.start()
 
+    def start_download(self, repo_id, file_name):
+        download_id = uuid.uuid4()
+        download_status = {
+            'finished': False,
+            'errors': []
+        }
+        self.downloads[download_id] = download_status
+
+        download = DownloadThread(download_status, repo_id, file_name)
+        self.download_threads.append(download)
+        download.start()
+        return download_id
+
+
+class DownloadThread(threading.Thread):
+    def __init__(self, download_status, repo_id, file_name):
+        super().__init__()
+        self.download_status = download_status
+        self.repo_id = repo_id
+        self.file_name = file_name
+
+        self.download_path = ''
+
+    def run(self) -> None:
+        time.sleep(10)
+        self.download_status['finished'] = True
+
 
 class PrintingThread(threading.Thread):
     def __init__(self, proc, *args, **kwargs):
@@ -109,6 +142,14 @@ class HttpHandler(BaseHTTPRequestHandler):
             self.end_headers()
         elif self.path == '/completion':
             self.handle_completion()
+        elif self.path == '/download-llm':
+            self.handle_download()
+        elif self.path == '/download-status':
+            self.handle_download_status()
+        elif self.path == '/downloads-in-progress':
+            self.handle_downloads_inprogress()
+        elif self.path == '/list-models':
+            self.handle_list_models()
         else:
             print("Unsupprted path", self.path)
             self.send_response(404)
@@ -137,6 +178,62 @@ class HttpHandler(BaseHTTPRequestHandler):
         for line in llm_manager.generate(json_data, content_type):
             print("Got line:", line)
             self.wfile.write(bytes(line, encoding='utf-8'))
+
+    def handle_download(self):
+        body = self.parse_json_body()
+        repo_id = body.get('repo_id')
+        file_name = body.get('file_name')
+
+        download_id = llm_manager.start_download(repo_id, file_name)
+        response_data = dict(download_id=download_id)
+
+        self.send_json_response(status_code=200, response_data=response_data)
+
+    def handle_download_status(self):
+        data = self.parse_json_body()
+        download_id = data.get('download_id')
+        download_status = llm_manager.downloads.get(download_id)
+
+        status_code = 200 if download_status else 404
+        response_data = download_status if download_status else { 'reason': 'Not found' }
+        self.send_json_response(status_code, response_data)
+
+    def handle_downloads_inprogress(self):
+        in_progress = [id for id, status in llm_manager.downloads.items()
+                       if not status['finished']]
+        self.send_json_response(status_code=200, response_data=in_progress)
+
+    def handle_list_models(self):
+        models_root = "installed_models"
+        models_registry = os.path.join(models_root, "models_registry.json")
+        if os.path.exists(models_registry):
+            with open(models_registry) as f:
+                content = f.read()
+            registry = json.loads(content)
+
+            response_data = []
+            for model in registry:
+                fields = ['repo_id', 'file_name']
+                item = {key: model[key] for key in fields}
+                response_data.append(item)
+        else:
+            response_data = []
+
+        self.send_json_response(status_code=200, response_data=response_data)
+
+    def parse_json_body(self):
+        content_len = int(self.headers.get('Content-Length'))
+        json_data = self.rfile.read(content_len)
+        json_data = json_data.decode("utf-8")
+        return json.loads(json_data)
+
+    def send_json_response(self, status_code, response_data, encoding='utf-8'):
+        self.send_response(status_code)
+        self.send_header("Content-type", "application/json")
+        self.end_headers()
+
+        response_json = json.dumps(response_data)
+        self.wfile.write(bytes(response_json, encoding=encoding))
 
 
 if __name__ == '__main__':

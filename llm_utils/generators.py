@@ -45,16 +45,33 @@ class ManagedRemoteLLM(RemoteLLM):
         - /clear-context
         - /completion
         - /download-llm
+        - /download-status
         - /list-llms
         - /configure-llm
         - /start-llm
         - /stop-llm
     """
-    def install_model(self, llm_store, vendor, llm_name):
-        """Downloads/installs a LLM on the server"""
+    def download_model(self, repo_id, file_name, llm_store='huggingface'):
+        """Begins downloading a LLM on the server and returns download id"""
+        url = "/download-llm"
+        body = dict(repo_id=repo_id, file_name=file_name)
+        return self.post_json(url, body)['download_id']
 
-    def list_installed(self):
+    def download_status(self, id):
+        url = "/download-status"
+        body = dict(download_id=id)
+        return self.post_json(url, body)
+
+    def downloads_in_progress(self):
+        url = "/downloads-in-progress"
+        resp = requests.get(url)
+        return resp.json()
+
+    def list_installed_models(self):
         """Returns a list of models installed on the LLM server"""
+        url = "/list-models"
+        resp = requests.get(url)
+        return resp.json()
 
     def configure_llm(self, config):
         """Passes the LLM configuration to the server"""
@@ -64,6 +81,11 @@ class ManagedRemoteLLM(RemoteLLM):
 
     def stop_llm(self):
         """Stop running LLM on the server"""
+
+    def post_json(self, url, body):
+        headers = {'Content-Type': 'application/json'}
+        resp = requests.post(url, data=json.dumps(body), headers=headers)
+        return resp.json()
 
 
 def clean_llm_settings(llm_settings):

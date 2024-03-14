@@ -2,9 +2,9 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
 
-
 from huggingface_hub import HfApi, list_repo_tree
 
+import llm_utils
 
 hf_api = HfApi()
 
@@ -67,3 +67,30 @@ def list_gguf_files(request):
                   if repo_file.path.lower().endswith('.gguf')]
     print(repo_id, '\n', gguf_files)
     return Response(gguf_files)
+
+
+@api_view(['POST'])
+def start_download(request):
+    repo_id = request.data['repo_id']
+    file_name = request.data['file_path']
+    download_id = llm_utils.start_download(repo_id, file_name)
+    return Response({'download_id': download_id})
+
+
+@api_view(['GET'])
+def get_download_status(request):
+    download_id = request.query_params.get('download_id')
+    if download_id is None:
+        return Response({}, status=status.HTTP_400_BAD_REQUEST)
+
+    return llm_utils.get_download_status(download_id)
+
+
+@api_view(['GET'])
+def get_downloads_in_progress(request):
+    return llm_utils.get_downloads_in_progress()
+
+
+@api_view(['GET'])
+def get_installed_models(request):
+    return llm_utils.get_installed_models()

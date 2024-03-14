@@ -17,3 +17,20 @@ def stream_tokens(prompt, clear_context=False, llm_settings=None, **settings):
     for token in token_generator.stream_tokens(prompt, clear_context=clear_context,
                                                llm_settings=llm_settings, **settings):
         yield token
+
+
+def start_download(repo_id, file_name):
+    return token_generator.start_download(repo_id, file_name)
+
+
+def get_downloads_in_progress():
+    """Show ids of all downloads in progress"""
+    return token_generator.downloads_in_progress()
+
+
+def get_download_status(download_id):
+    return token_generator.download_status(download_id)
+
+
+def get_installed_models():
+    return token_generator.list_installed_models()
