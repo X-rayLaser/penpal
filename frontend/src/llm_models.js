@@ -166,7 +166,9 @@ class ModelControlPanel extends React.Component {
                 )}
                 <HuggingfaceHubRepositoryViewer 
                     onStartDownload={this.handleStartDownload}
-                    reservedModels={reservedModels} />
+                    downloads={this.state.downloads}
+                    installedModels={this.state.installedModels}
+                    />
             </div>
         );
     }
@@ -236,6 +238,14 @@ class HuggingfaceHubRepositoryViewer extends React.Component {
         this.setState({ selectedFileIndex: fileIndex });
     }
 
+    containsModel(models, repo_id, file_name) {
+        let installedMatches = models.filter(model => 
+            model.repo_id === repo_id && model.file_name === file_name
+        );
+
+        return installedMatches.length > 0;
+    }
+
     render() {
         function renderSize(size) {
             const KB = 1000
@@ -268,11 +278,18 @@ class HuggingfaceHubRepositoryViewer extends React.Component {
             if (this.state.detailLoading) {
                 itemBody = <div>Please, wait...</div>;
             } else {
-                let ggufItems = this.state.ggufFiles.map((fileInfo, fileIndex) => 
-                    <Dropdown.Item key={fileIndex} eventKey={fileIndex} onClick={e => this.handleFileItemClick(fileIndex)}>
-                        {`${fileInfo.path} (${renderSize(fileInfo.size)})`}
-                    </Dropdown.Item>
-                );
+                let ggufItems = this.state.ggufFiles.map((fileInfo, fileIndex) => {
+                    let isInstalled = this.containsModel(this.props.installedModels, item.id, fileInfo.path);
+                    let isInProgress = this.containsModel(this.props.downloads, item.id, fileInfo.path);
+
+                    return (
+                        <Dropdown.Item key={fileIndex} eventKey={fileIndex} onClick={e => this.handleFileItemClick(fileIndex)}>
+                            {`${fileInfo.path} (${renderSize(fileInfo.size)})`}
+                            {isInstalled && <Badge bg="success">   Installed</Badge>}
+                            {isInProgress && <Badge>   Installing...</Badge>}
+                        </Dropdown.Item>
+                    );
+                });
 
                 let licenses = item.licenses.join(", ");
                 let datasets = item.datasets.join(", ");
@@ -295,7 +312,12 @@ class HuggingfaceHubRepositoryViewer extends React.Component {
 
                 let disableDownload = false;
 
-                this.props.reservedModels.forEach(d => {
+                let isInstalled = this.containsModel(this.props.installedModels, item.id, filePath);
+                let isInProgress = this.containsModel(this.props.downloads, item.id, filePath);
+
+                let reservedModels = [...this.props.downloads, ...this.props.installedModels];
+
+                reservedModels.forEach(d => {
                     if (d.repo_id === item.id && d.file_name === filePath) {
                         disableDownload = true;
                     }
@@ -315,7 +337,19 @@ class HuggingfaceHubRepositoryViewer extends React.Component {
                         <DropdownButton title="Select a file" variant="primary" className="mb-3 mt-3">
                             {ggufItems}
                         </DropdownButton>
-                        {this.state.selectedFileIndex !== null && (
+
+                        {this.state.selectedFileIndex !== null && isInstalled && (
+                            <Alert variant="success" className="mb-3">
+                                {`Model ${filePath} is installed`}
+                            </Alert>
+                        )}
+                        {this.state.selectedFileIndex !== null && isInProgress && (
+                            <Alert variant="primary" className="mb-3">
+                                {`Model ${filePath} is installing`}
+                                <Spinner animation="border" role="status" size="sm"></Spinner>
+                            </Alert>
+                        )}
+                        {this.state.selectedFileIndex !== null && !isInstalled && !isInProgress && (
                             <div>
                                 <div className="mb-3">
                                     <span>A model to be downloaded: </span>
