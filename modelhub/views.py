@@ -79,11 +79,12 @@ def start_download(request):
 
 @api_view(['GET'])
 def get_download_status(request):
-    download_id = request.query_params.get('download_id')
-    if download_id is None:
+    repo_id = request.query_params.get('repo_id')
+    file_name = request.query_params.get('file_name')
+    if repo_id is None or file_name is None:
         return Response({}, status=status.HTTP_400_BAD_REQUEST)
 
-    return Response(llm_utils.get_download_status(download_id))
+    return Response(llm_utils.get_download_status(repo_id, file_name))
 
 
 @api_view(['GET'])

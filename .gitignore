@@ -12,3 +12,4 @@ llama.cpp
 *.log
 tools/specs/custom
 tools/custom.py
+installed_models

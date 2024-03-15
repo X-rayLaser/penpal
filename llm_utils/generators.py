@@ -52,14 +52,14 @@ class ManagedRemoteLLM(RemoteLLM):
         - /stop-llm
     """
     def start_download(self, repo_id, file_name, llm_store='huggingface'):
-        """Begins downloading a LLM on the server and returns download id"""
+        """Begins downloading a LLM on the server"""
         url = self.make_full_url("/download-llm")
         body = dict(repo_id=repo_id, file_name=file_name)
         return self.post_json(url, body)['download_id']
 
-    def download_status(self, id):
+    def download_status(self, repo_id, file_name):
         url = self.make_full_url("/download-status")
-        body = dict(download_id=id)
+        body = dict(repo_id=repo_id, file_name=file_name)
         return self.post_json(url, body)
 
     def downloads_in_progress(self):

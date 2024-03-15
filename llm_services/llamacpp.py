@@ -8,6 +8,10 @@ import os
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 
+models_root = "installed_models"
+models_registry = os.path.join(models_root, "models_registry.json")
+
+
 class LLMManager:
     def __init__(self):
         self.executable_path = ""
@@ -73,9 +77,8 @@ class LLMManager:
         self.printing_thread.start()
 
     def start_download(self, repo_id, file_name):
-        download_id = uuid.uuid4().hex
+        download_id = (repo_id, file_name)
         download_info = {
-            'id': download_id,
             'repo_id': repo_id,
             'file_name': file_name,
             'finished': False,
@@ -100,7 +103,26 @@ class DownloadThread(threading.Thread):
 
     def run(self) -> None:
         time.sleep(10)
-        self.download_info['finished'] = True
+
+        with threading.Lock():
+            self.download_info['finished'] = True
+
+            os.makedirs(models_root, exist_ok=True)
+
+            if not os.path.exists(models_registry):
+                with open(models_registry, "w") as f:
+                    f.write(json.dumps([]))
+
+            with open(models_registry) as f:
+                content = f.read()
+                entries = json.loads(content)
+
+            metadata = dict(repo_id=self.repo_id, file_name=self.file_name)
+            entries.append(metadata)
+
+            with open(models_registry, "w") as f:
+                entries_json = json.dumps(entries)
+                f.write(entries_json)
 
 
 class PrintingThread(threading.Thread):
@@ -202,8 +224,9 @@ class HttpHandler(BaseHTTPRequestHandler):
 
     def handle_download_status(self):
         data = self.parse_json_body()
-        download_id = data.get('download_id')
-        download_status = llm_manager.downloads.get(download_id)
+        repo_id = data.get('repo_id')
+        file_name = data.get('file_name')
+        download_status = llm_manager.downloads.get((repo_id, file_name))
 
         status_code = 200 if download_status else 404
         response_data = download_status if download_status else { 'reason': 'Not found' }

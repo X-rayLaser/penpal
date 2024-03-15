@@ -20,7 +20,8 @@ class ModelControlPanel extends React.Component {
         super(props);
         this.state = {
             downloads: [],
-            installedModels: []
+            installedModels: [],
+            failedDownloads: []
         };
 
         this.intervalMilliSecs = 5000;
@@ -29,9 +30,10 @@ class ModelControlPanel extends React.Component {
     }
 
     componentDidMount() {
+        this.runInitialSync();
+
         this.intervalId = setInterval(() => {
-            this.syncDownloadsInProgress();
-            this.syncInstalledModels();
+            this.refreshDownloads();
         }, this.intervalMilliSecs);
     }
 
@@ -39,12 +41,34 @@ class ModelControlPanel extends React.Component {
         clearInterval(this.intervalId);
     }
 
-    syncDownloadsInProgress() {
-        this.syncStateLists('/modelhub/downloads-in-progress/', "downloads");
+    runInitialSync() {
+        const urlInProgress = '/modelhub/downloads-in-progress/';
+        const urlListModels = '/modelhub/installed-models/';
+
+        let fetcher = new GenericFetchJson();
+        
+        fetcher.performFetch(urlInProgress).then(downloads => {
+            this.setState({ downloads }, () => {
+                fetcher.performFetch(urlListModels).then(installedModels => {
+                    
+                    let cleanedDownloads = downloads.filter(download => {
+                        let duplicates = installedModels.filter(model => 
+                            download.repo_id === model.repo_id && 
+                            download.file_name === model.file_name
+                        );
+                        return duplicates.length === 0;
+                    });
+
+                    this.setState({ downloads: cleanedDownloads, installedModels});
+                });
+            });
+        });
+
+        this.syncFailedDownloads();
     }
 
-    syncInstalledModels() {
-        this.syncStateLists('/modelhub/installed-models/', "installedModels");
+    syncFailedDownloads() {
+        //this.syncStateLists('/modelhub/failed-downloads/', "failedDownloads");
     }
 
     syncStateLists(url, listKey) {
@@ -56,33 +80,93 @@ class ModelControlPanel extends React.Component {
 
     }
 
+    refreshDownloads() {
+        let fetcher = new GenericFetchJson();
+
+        let statusPromises = this.state.downloads.map(download => {
+            let repo_id = encodeURIComponent(download.repo_id);
+            let file_name = encodeURIComponent(download.file_name);
+            let url = `/modelhub/get-download-status/?repo_id=${repo_id}&file_name=${file_name}`;
+            return fetcher.performFetch(url);
+        });
+        
+        Promise.all(statusPromises).then(downloadStatuses => {
+            let successfulDownloads = [];
+            let failedDownloads = [];
+            let inProgress = [];
+
+            this.state.downloads.forEach((download, index) => {
+                let status = downloadStatuses[index];
+                if (status.finished && status.errors.length === 0) {
+                    successfulDownloads.push({
+                        repo_id: status.repo_id,
+                        file_name: status.file_name
+                    });
+                } else if (status.finished) {
+                    failedDownloads.push(status);
+                } else {
+                    inProgress.push(status);
+                }
+            });
+
+            this.setState({
+                downloads: inProgress,
+                installedModels: [...this.state.installedModels, ...successfulDownloads],
+                failedDownloads,
+            })
+        });
+    }
+
     handleStartDownload(repoId, fileName) {
         console.log("starting download:", repoId, fileName);
-        const url = '/modelhub/start-download/'
-        let fetcher = new GenericFetchJson();
-        fetcher.method = "POST";
-        fetcher.body = {
+        const url = '/modelhub/start-download/';
+
+        let download = {
             repo_id: repoId,
             file_name: fileName
         };
 
+        let fetcher = new GenericFetchJson();
+        fetcher.method = "POST";
+        fetcher.body = download;
+    
+        this.setState(prevState => ({
+            downloads: [...prevState.downloads, download]
+        }));
         fetcher.performFetch(url);
     }
     render() {
         let downloads = this.state.downloads;
         let downloadsInProgress = downloads.map((modelInfo, index) => 
-            <ListGroup.Item variant="secondary">
-                {`Installing a model: ${modelInfo.repo_id}/${modelInfo.file_name}... `}
+            <ListGroup.Item key={index} variant="secondary">
+                {`Installing a model: ${modelInfo.repo_id}--${modelInfo.file_name}... `}
                 <Spinner animation="border" role="status">
                 </Spinner>
             </ListGroup.Item>
         );
+
+        let installedModels = this.state.installedModels.map((modelInfo, index) =>
+            <ListGroup.Item key={index} variant="success">
+                {`Repository: ${modelInfo.repo_id} Path: ${modelInfo.file_name}... `}
+            </ListGroup.Item>
+        );
+
+        let reservedModels = [...this.state.downloads, ...this.state.installedModels];
         return (
             <div>
                 {downloadsInProgress.length > 0 && (
-                    <ListGroup>{downloadsInProgress}</ListGroup>
+                    <ListGroup className="mt-3">{downloadsInProgress}</ListGroup>
                 )}
-                <HuggingfaceHubRepositoryViewer onStartDownload={this.handleStartDownload} />
+
+                {installedModels.length > 0 && (
+                    <div className="mt-3">
+                        <h4>Installed models</h4>
+                        <ListGroup>{installedModels}</ListGroup>
+                    </div>
+                )}
+                <HuggingfaceHubRepositoryViewer 
+                    onStartDownload={this.handleStartDownload}
+                    reservedModels={reservedModels} />
             </div>
         );
     }
@@ -200,14 +284,22 @@ class HuggingfaceHubRepositoryViewer extends React.Component {
                 let filePath = null;
                 let fileSize = null;
 
-                if (this.state.selectedFileIndex) {
+                if (this.state.selectedFileIndex !== null) {
                     filePath = this.state.ggufFiles[this.state.selectedFileIndex].path;
-                    fileSize = this.state.ggufFiles[this.state.selectedFileIndex].size;
+                    fileSize = renderSize(this.state.ggufFiles[this.state.selectedFileIndex].size);
                 }
 
                 const handleStartDownload = e => {
                     this.props.onStartDownload(item.id, filePath);
                 }
+
+                let disableDownload = false;
+
+                this.props.reservedModels.forEach(d => {
+                    if (d.repo_id === item.id && d.file_name === filePath) {
+                        disableDownload = true;
+                    }
+                });
 
                 itemBody = (
                     <div>
@@ -215,7 +307,7 @@ class HuggingfaceHubRepositoryViewer extends React.Component {
                         {datasets.length > 0 && <div>Datasets: {datasets}</div>}
                         {papers.length > 0 && <div>Papers: {papers}</div>}
                         {tags.length > 0 && (
-                            <Stack direction="horizontal" gap={2} style={{ 'overflow-x': 'auto' }}>
+                            <Stack direction="horizontal" gap={2} style={{ 'overflowX': 'auto' }}>
                                 Tags: {tags}
                             </Stack>
                         )}
@@ -238,7 +330,9 @@ class HuggingfaceHubRepositoryViewer extends React.Component {
                                 <Alert variant="warning" className="mb-3">
                                     Make sure you have enough disk space on LLM server to download a chosen model.
                                 </Alert>
-                                <Button variant="secondary" onClick={handleStartDownload}>Start download</Button>
+                                <Button variant="secondary" onClick={handleStartDownload} disabled={disableDownload}>
+                                    Start download    
+                                </Button>
                             </div>
                         )}
                     </div>

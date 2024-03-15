@@ -28,8 +28,8 @@ def get_downloads_in_progress():
     return token_generator.downloads_in_progress()
 
 
-def get_download_status(download_id):
-    return token_generator.download_status(download_id)
+def get_download_status(repo_id, file_name):
+    return token_generator.download_status(repo_id, file_name)
 
 
 def get_installed_models():
