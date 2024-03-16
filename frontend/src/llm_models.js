@@ -22,7 +22,8 @@ class ModelControlPanel extends React.Component {
         this.state = {
             downloads: [],
             installedModels: [],
-            failedDownloads: []
+            failedDownloads: [],
+            initialSyncDone: false
         };
 
         this.intervalMilliSecs = 5000;
@@ -60,7 +61,11 @@ class ModelControlPanel extends React.Component {
                         return duplicates.length === 0;
                     });
 
-                    this.setState({ downloads: cleanedDownloads, installedModels});
+                    this.setState({ 
+                        downloads: cleanedDownloads,
+                        installedModels,
+                        initialSyncDone: true 
+                    });
                 });
             });
         });
@@ -183,6 +188,16 @@ class ModelControlPanel extends React.Component {
             </Card>
             </Col>
         );
+
+        if (!this.state.initialSyncDone) {
+            return (
+                <div>Loading page... 
+                    <Spinner animation="border" role="status">
+                        <span className="visually-hidden">Loading...</span>
+                    </Spinner>
+              </div>
+            );
+        }
 
         return (
             <div>

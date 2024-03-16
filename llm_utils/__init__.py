@@ -13,6 +13,9 @@ cls = getattr(importlib.import_module(module_path), generator_class)
 token_generator = cls(**generator_kwargs)
 
 
+# todo: remove functions below, use token generator instance directly in views
+
+
 def stream_tokens(prompt, clear_context=False, llm_settings=None, **settings):
     for token in token_generator.stream_tokens(prompt, clear_context=clear_context,
                                                llm_settings=llm_settings, **settings):
