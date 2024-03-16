@@ -238,139 +238,20 @@ class HuggingfaceHubRepositoryViewer extends React.Component {
         this.setState({ selectedFileIndex: fileIndex });
     }
 
-    containsModel(models, repo_id, file_name) {
-        let installedMatches = models.filter(model => 
-            model.repo_id === repo_id && model.file_name === file_name
-        );
-
-        return installedMatches.length > 0;
-    }
-
     render() {
-        function renderSize(size) {
-            const KB = 1000
-            const MB = KB * 1000;
-            const GB = MB * 1000;
-
-            let newSize;
-            let units;
-            if (size > GB) {
-                newSize = size / GB;
-                units = 'GB';
-            } else if (size > MB) {
-                newSize = size / MB;
-                units = 'MB';
-            } else if (size > KB) {
-                newSize = size / KB;
-                units = 'KB';
-                
-            } else {
-                newSize = size;
-                units = 'B';
-            }
-
-            return `${Math.round(newSize * 10) / 10} ${units}`;
-        }
-
-
         let items = this.state.foundItems.map((item, index) => {
             let itemBody;
             if (this.state.detailLoading) {
                 itemBody = <div>Please, wait...</div>;
             } else {
-                let ggufItems = this.state.ggufFiles.map((fileInfo, fileIndex) => {
-                    let isInstalled = this.containsModel(this.props.installedModels, item.id, fileInfo.path);
-                    let isInProgress = this.containsModel(this.props.downloads, item.id, fileInfo.path);
-
-                    return (
-                        <Dropdown.Item key={fileIndex} eventKey={fileIndex} onClick={e => this.handleFileItemClick(fileIndex)}>
-                            {`${fileInfo.path} (${renderSize(fileInfo.size)})`}
-                            {isInstalled && <Badge bg="success">   Installed</Badge>}
-                            {isInProgress && <Badge>   Installing...</Badge>}
-                        </Dropdown.Item>
-                    );
-                });
-
-                let licenses = item.licenses.join(", ");
-                let datasets = item.datasets.join(", ");
-                let papers = item.papers.join(", ");
-                let tags = item.tags.map((tag, tagIndex) => 
-                    <Badge key={tagIndex} bg="success">{tag}</Badge>
-                );
-
-                let filePath = null;
-                let fileSize = null;
-
-                if (this.state.selectedFileIndex !== null) {
-                    filePath = this.state.ggufFiles[this.state.selectedFileIndex].path;
-                    fileSize = renderSize(this.state.ggufFiles[this.state.selectedFileIndex].size);
-                }
-
-                const handleStartDownload = e => {
-                    this.props.onStartDownload(item.id, filePath);
-                }
-
-                let disableDownload = false;
-
-                let isInstalled = this.containsModel(this.props.installedModels, item.id, filePath);
-                let isInProgress = this.containsModel(this.props.downloads, item.id, filePath);
-
-                let reservedModels = [...this.props.downloads, ...this.props.installedModels];
-
-                reservedModels.forEach(d => {
-                    if (d.repo_id === item.id && d.file_name === filePath) {
-                        disableDownload = true;
-                    }
-                });
-
-                itemBody = (
-                    <div>
-                        {licenses.length > 0 && <div>Licenses: {licenses}</div>}
-                        {datasets.length > 0 && <div>Datasets: {datasets}</div>}
-                        {papers.length > 0 && <div>Papers: {papers}</div>}
-                        {tags.length > 0 && (
-                            <Stack direction="horizontal" gap={2} style={{ 'overflowX': 'auto' }}>
-                                Tags: {tags}
-                            </Stack>
-                        )}
-                        
-                        <DropdownButton title="Select a file" variant="primary" className="mb-3 mt-3">
-                            {ggufItems}
-                        </DropdownButton>
-
-                        {this.state.selectedFileIndex !== null && isInstalled && (
-                            <Alert variant="success" className="mb-3">
-                                {`Model ${filePath} is installed`}
-                            </Alert>
-                        )}
-                        {this.state.selectedFileIndex !== null && isInProgress && (
-                            <Alert variant="primary" className="mb-3">
-                                {`Model ${filePath} is installing`}
-                                <Spinner animation="border" role="status" size="sm"></Spinner>
-                            </Alert>
-                        )}
-                        {this.state.selectedFileIndex !== null && !isInstalled && !isInProgress && (
-                            <div>
-                                <div className="mb-3">
-                                    <span>A model to be downloaded: </span>
-                                    <span>{filePath} </span>
-                                    <span>{`(${fileSize})`}</span>
-                                </div>
-
-                                <Alert variant="warning" className="mb-3">
-                                    Be careful when downloading third-party models. Avoid downloads 
-                                    from authors who you do not trust.
-                                </Alert>
-                                <Alert variant="warning" className="mb-3">
-                                    Make sure you have enough disk space on LLM server to download a chosen model.
-                                </Alert>
-                                <Button variant="secondary" onClick={handleStartDownload} disabled={disableDownload}>
-                                    Start download    
-                                </Button>
-                            </div>
-                        )}
-                    </div>
-                );
+                itemBody = <RepositoryDetail 
+                                ggufFiles={this.state.ggufFiles}
+                                installedModels={this.props.installedModels}
+                                downloads={this.props.downloads}
+                                onFileItemClick={this.handleFileItemClick}
+                                selectedFileIndex={this.state.selectedFileIndex}
+                                onStartDownload={(repoId, filePath) => this.props.onStartDownload(repoId, filePath)}
+                                repo={item} />;
             }
             return (
                 <Accordion.Item key={index} eventKey={`${index}`}>
@@ -409,6 +290,148 @@ class HuggingfaceHubRepositoryViewer extends React.Component {
             </div>
         );
     }
+};
+
+
+function RepositoryDetail(props) {
+    let repo = props.repo;
+
+    let ggufItems = props.ggufFiles.map((fileInfo, fileIndex) => {
+        let isInstalled = containsModel(props.installedModels, repo.id, fileInfo.path);
+        let isInProgress = containsModel(props.downloads, repo.id, fileInfo.path);
+
+        return (
+            <Dropdown.Item key={fileIndex} eventKey={fileIndex} onClick={e => props.onFileItemClick(fileIndex)}>
+                {`${fileInfo.path} (${renderSize(fileInfo.size)})`}
+                {isInstalled && <Badge bg="success">Installed</Badge>}
+                {isInProgress && <Badge>Installing...</Badge>}
+            </Dropdown.Item>
+        );
+    });
+
+    let filePath = null;
+    let fileSize = null;
+
+    if (props.selectedFileIndex !== null) {
+        filePath = props.ggufFiles[props.selectedFileIndex].path;
+        fileSize = renderSize(props.ggufFiles[props.selectedFileIndex].size);
+    }
+
+    const handleStartDownload = e => {
+        props.onStartDownload(repo.id, filePath);
+    }
+
+    let isInstalled = containsModel(props.installedModels, repo.id, filePath);
+    let isInProgress = containsModel(props.downloads, repo.id, filePath);
+
+    return (
+        <div>
+            <RepositoryMetadata repo={repo} />
+            
+            <DropdownButton title="Select a file" variant="primary" className="mb-3 mt-3">
+                {ggufItems}
+            </DropdownButton>
+
+            <ModelDownload filePath={filePath} fileSize={fileSize} installed={isInstalled}
+                inProgress={isInProgress} onStartDownload={e => handleStartDownload(e)} />
+        </div>
+    );
+}
+
+
+function RepositoryMetadata(props) {
+    let licenses = props.repo.licenses.join(", ");
+    let datasets = props.repo.datasets.join(", ");
+    let papers = props.repo.papers.join(", ");
+    let tags = props.repo.tags.map((tag, tagIndex) => 
+        <Badge key={tagIndex} bg="success">{tag}</Badge>
+    );
+    return (
+        <div>
+            {licenses.length > 0 && <div>Licenses: {licenses}</div>}
+            {datasets.length > 0 && <div>Datasets: {datasets}</div>}
+            {papers.length > 0 && <div>Papers: {papers}</div>}
+            {tags.length > 0 && (
+                <Stack direction="horizontal" gap={2} style={{ 'overflowX': 'auto' }}>
+                    Tags: {tags}
+                </Stack>
+            )}
+        </div>
+    );
+}
+
+
+function ModelDownload(props) {
+    return (
+        <div>
+            {props.filePath !== null && props.installed && (
+                <Alert variant="success" className="mb-3">
+                    {`Model ${props.filePath} is installed`}
+                </Alert>
+            )}
+            {props.filePath !== null && props.inProgress && (
+                <Alert variant="primary" className="mb-3">
+                    {`Model ${props.filePath} is installing`}
+                    <Spinner animation="border" role="status" size="sm"></Spinner>
+                </Alert>
+            )}
+            {props.filePath !== null && !props.installed && !props.inProgress && (
+                <div>
+                    <div className="mb-3">
+                        <span>A model to be downloaded: </span>
+                        <span>{props.filePath} </span>
+                        <span>{`(${props.fileSize})`}</span>
+                    </div>
+
+                    <Alert variant="warning" className="mb-3">
+                        Be careful when downloading third-party models. Avoid downloads 
+                        from authors who you do not trust.
+                    </Alert>
+                    <Alert variant="warning" className="mb-3">
+                        Make sure you have enough disk space on LLM server to download a chosen model.
+                    </Alert>
+                    <Button variant="secondary" onClick={props.onStartDownload}>
+                        Start download    
+                    </Button>
+                </div>
+            )}
+        </div>
+    );
+}
+
+
+function renderSize(size) {
+    const KB = 1000
+    const MB = KB * 1000;
+    const GB = MB * 1000;
+
+    let newSize;
+    let units;
+    if (size > GB) {
+        newSize = size / GB;
+        units = 'GB';
+    } else if (size > MB) {
+        newSize = size / MB;
+        units = 'MB';
+    } else if (size > KB) {
+        newSize = size / KB;
+        units = 'KB';
+        
+    } else {
+        newSize = size;
+        units = 'B';
+    }
+
+    return `${Math.round(newSize * 10) / 10} ${units}`;
+}
+
+
+function containsModel(models, repo_id, file_name) {
+    let matches = models.filter(model => 
+        model.repo_id === repo_id && model.file_name === file_name
+    );
+
+    return matches.length > 0;
 }
 
 
