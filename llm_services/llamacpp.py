@@ -76,28 +76,33 @@ class LLMManager:
         self.printing_thread = PrintingThread(self.process)
         self.printing_thread.start()
 
-    def start_download(self, repo_id, file_name):
+    def start_download(self, repo, file_name, size):
+        repo_id = repo['id']
         download_id = (repo_id, file_name)
         download_info = {
             'repo_id': repo_id,
+            'repo': repo,
             'file_name': file_name,
+            'size': size,
             'finished': False,
             'errors': []
         }
         self.downloads[download_id] = download_info
 
-        download = DownloadThread(download_info, repo_id, file_name)
+        download = DownloadThread(download_info, repo, file_name, size)
         self.download_threads.append(download)
         download.start()
         return download_id
 
 
 class DownloadThread(threading.Thread):
-    def __init__(self, download_info, repo_id, file_name):
+    def __init__(self, download_info, repo, file_name, size):
         super().__init__()
         self.download_info = download_info
-        self.repo_id = repo_id
+        self.repo_id = repo['id']
+        self.repo = repo
         self.file_name = file_name
+        self.size = size
 
         self.download_path = ''
 
@@ -117,7 +122,8 @@ class DownloadThread(threading.Thread):
                 content = f.read()
                 entries = json.loads(content)
 
-            metadata = dict(repo_id=self.repo_id, file_name=self.file_name)
+            metadata = dict(repo_id=self.repo_id, repo=self.repo, 
+                            file_name=self.file_name, size=self.size)
             entries.append(metadata)
 
             with open(models_registry, "w") as f:
@@ -214,10 +220,11 @@ class HttpHandler(BaseHTTPRequestHandler):
 
     def handle_download(self):
         body = self.parse_json_body()
-        repo_id = body.get('repo_id')
+        repo = body.get('repo')
         file_name = body.get('file_name')
+        size = body.get('size')
 
-        download_id = llm_manager.start_download(repo_id, file_name)
+        download_id = llm_manager.start_download(repo, file_name, size)
         response_data = dict(download_id=download_id)
 
         self.send_json_response(status_code=200, response_data=response_data)
@@ -247,8 +254,8 @@ class HttpHandler(BaseHTTPRequestHandler):
 
             response_data = []
             for model in registry:
-                fields = ['repo_id', 'file_name']
-                item = {key: model[key] for key in fields}
+                fields = ['repo_id', 'repo', 'file_name', 'size']
+                item = {key: model.get(key, '') for key in fields}
                 response_data.append(item)
         else:
             response_data = []

@@ -11,6 +11,7 @@ import Alert from 'react-bootstrap/Alert';
 import Badge from 'react-bootstrap/Badge';
 import Stack from 'react-bootstrap/Stack';
 import Spinner from 'react-bootstrap/Spinner';
+import Card from 'react-bootstrap/Card';
 import { GenericFetchJson } from './generic_components';
 import { withRouter } from "./utils";
 
@@ -100,7 +101,9 @@ class ModelControlPanel extends React.Component {
                 if (status.finished && status.errors.length === 0) {
                     successfulDownloads.push({
                         repo_id: status.repo_id,
-                        file_name: status.file_name
+                        repo: status.repo,
+                        file_name: status.file_name,
+                        size: status.size
                     });
                 } else if (status.finished) {
                     failedDownloads.push(status);
@@ -117,13 +120,14 @@ class ModelControlPanel extends React.Component {
         });
     }
 
-    handleStartDownload(repoId, fileName) {
-        console.log("starting download:", repoId, fileName);
+    handleStartDownload(repo, fileName, fileSize) {
+        console.log("starting download:", repo, fileName, fileSize);
         const url = '/modelhub/start-download/';
 
         let download = {
-            repo_id: repoId,
-            file_name: fileName
+            repo,
+            file_name: fileName,
+            size: fileSize
         };
 
         let fetcher = new GenericFetchJson();
@@ -131,7 +135,12 @@ class ModelControlPanel extends React.Component {
         fetcher.body = download;
     
         this.setState(prevState => ({
-            downloads: [...prevState.downloads, download]
+            downloads: [...prevState.downloads, {
+                repo,
+                repo_id: repo.id,
+                file_name: fileName,
+                size: fileSize
+            }]
         }));
         fetcher.performFetch(url);
     }
@@ -146,12 +155,35 @@ class ModelControlPanel extends React.Component {
         );
 
         let installedModels = this.state.installedModels.map((modelInfo, index) =>
-            <ListGroup.Item key={index} variant="success">
-                {`Repository: ${modelInfo.repo_id} Path: ${modelInfo.file_name}... `}
-            </ListGroup.Item>
+            <Col key={index}>
+            <Card className="mb-3 me-3"
+                bg='light' text='dark'>
+                <Card.Body>
+                    <div style={{ minHeight: '95px'}}>
+                        <Card.Title>{modelInfo.repo_id}</Card.Title>
+                        <Card.Subtitle className="mb-2 text-muted">{modelInfo.file_name}</Card.Subtitle>
+                    </div>
+
+                    <Card.Text>
+                        <JoinedItemText name="Licenses" items={modelInfo.repo.licenses} separator=", " />
+                    </Card.Text>
+
+                    <Card.Text>
+                        <PapersUrlsInline papers={modelInfo.repo.papers} />
+                    </Card.Text>
+
+                    <Card.Text>
+                        <span>Size on disk: {renderSize(modelInfo.size)}</span>
+                    </Card.Text>
+
+                    <Button as='a' href={`https://huggingface.co/${modelInfo.repo_id}`} target='_blank'>
+                        View on Hugging Face
+                    </Button>
+                </Card.Body>
+            </Card>
+            </Col>
         );
 
-        let reservedModels = [...this.state.downloads, ...this.state.installedModels];
         return (
             <div>
                 {downloadsInProgress.length > 0 && (
@@ -161,7 +193,7 @@ class ModelControlPanel extends React.Component {
                 {installedModels.length > 0 && (
                     <div className="mt-3">
                         <h4>Installed models</h4>
-                        <ListGroup>{installedModels}</ListGroup>
+                        <Row xs={1} md={3} className="g-2">{installedModels}</Row>
                     </div>
                 )}
                 <HuggingfaceHubRepositoryViewer 
@@ -250,7 +282,9 @@ class HuggingfaceHubRepositoryViewer extends React.Component {
                                 downloads={this.props.downloads}
                                 onFileItemClick={this.handleFileItemClick}
                                 selectedFileIndex={this.state.selectedFileIndex}
-                                onStartDownload={(repoId, filePath) => this.props.onStartDownload(repoId, filePath)}
+                                onStartDownload={(repo, filePath, fileSize) => this.props.onStartDownload(
+                                    repo, filePath, fileSize
+                                )}
                                 repo={item} />;
             }
             return (
@@ -314,11 +348,11 @@ function RepositoryDetail(props) {
 
     if (props.selectedFileIndex !== null) {
         filePath = props.ggufFiles[props.selectedFileIndex].path;
-        fileSize = renderSize(props.ggufFiles[props.selectedFileIndex].size);
+        fileSize = props.ggufFiles[props.selectedFileIndex].size;
     }
 
     const handleStartDownload = e => {
-        props.onStartDownload(repo.id, filePath);
+        props.onStartDownload(repo, filePath, fileSize);
     }
 
     let isInstalled = containsModel(props.installedModels, repo.id, filePath);
@@ -342,7 +376,9 @@ function RepositoryDetail(props) {
 function RepositoryMetadata(props) {
     let licenses = props.repo.licenses.join(", ");
     let datasets = props.repo.datasets.join(", ");
-    let papers = props.repo.papers.join(", ");
+    let papers = props.repo.papers.map((paperId, index) => 
+        <ArxivLink key={index} paperId={paperId} />
+    );
     let tags = props.repo.tags.map((tag, tagIndex) => 
         <Badge key={tagIndex} bg="success">{tag}</Badge>
     );
@@ -361,7 +397,38 @@ function RepositoryMetadata(props) {
 }
 
 
+function JoinedItemText(props) {
+    let items = props.items.join(props.separator);
+
+    return (
+        <span>
+            {`${props.name}: ${items}`}
+        </span>
+    );
+}
+
+
+function PapersUrlsInline(props) {
+    let urls = props.papers.map((paperId, index) => 
+        <ArxivLink key={index} paperId={paperId} />
+    );
+    return (
+        <span>Papers: {urls}</span>
+    );
+}
+
+
+function ArxivLink(props) {
+    let url = `https://arxiv.org/abs/${props.paperId}`;
+        
+    return (
+        <Card.Link href={url} target='_blank'>{url}</Card.Link>
+    );
+}
+
+
 function ModelDownload(props) {
+    let fileSize = props.fileSize && renderSize(props.fileSize);
     return (
         <div>
             {props.filePath !== null && props.installed && (
@@ -380,7 +447,7 @@ function ModelDownload(props) {
                     <div className="mb-3">
                         <span>A model to be downloaded: </span>
                         <span>{props.filePath} </span>
-                        <span>{`(${props.fileSize})`}</span>
+                        <span>{`(${fileSize})`}</span>
                     </div>
 
                     <Alert variant="warning" className="mb-3">

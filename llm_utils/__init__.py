@@ -19,8 +19,8 @@ def stream_tokens(prompt, clear_context=False, llm_settings=None, **settings):
         yield token
 
 
-def start_download(repo_id, file_name):
-    return token_generator.start_download(repo_id, file_name)
+def start_download(repo, file_name, size):
+    return token_generator.start_download(repo, file_name, size)
 
 
 def get_downloads_in_progress():

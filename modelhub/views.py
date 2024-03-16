@@ -71,9 +71,10 @@ def list_gguf_files(request):
 
 @api_view(['POST'])
 def start_download(request):
-    repo_id = request.data['repo_id']
+    repo = request.data['repo']
     file_name = request.data['file_name']
-    download_id = llm_utils.start_download(repo_id, file_name)
+    size = request.data['size']
+    download_id = llm_utils.start_download(repo, file_name, size)
     return Response({'download_id': download_id})
 
 
