@@ -37,6 +37,10 @@ class BaseSelectionWidget extends React.Component {
         return <div></div>
     }
 
+    getName(item) {
+        return item.name;
+    }
+
     render() {
         let items = [];
 
@@ -45,11 +49,12 @@ class BaseSelectionWidget extends React.Component {
         let props = this.props;
 
         if (props.items.length > 0) {
-            items = props.items.map((item, index) =>
-                <option key={index} value={item.name}>{item.name}</option>
-            );
+            items = props.items.map((item, index) => {
+                let name = this.getName(item);
+                return <option key={index} value={name}>{name}</option>;
+            });
 
-            selectedItem = props.items.filter(item => item.name === props.selectedName)[0];
+            selectedItem = props.items.filter(item => this.getName(item) === props.selectedName)[0];
         }
 
         let detailWidget = this.renderDetailIfExists(selectedItem);
@@ -95,6 +100,59 @@ class SystemMessageSelectionWidget extends BaseSelectionWidget {
                 </Card.Body>
             </Card>
         );
+    }
+}
+
+
+class RepositorySelectionWidget extends BaseSelectionWidget {
+    constructor(props) {
+        super(props);
+        this.selectionLabel = "Model repository id";
+        this.selectionId = "model_repository_select"
+        this.ariaLabel = this.selectionLabel + " selection";
+    }
+
+    renderDetail(item) {
+        return (
+            <Card bg="light" text="dark" className="mt-3 mb-3">
+                <Card.Body>
+                    <Card.Title>{this.selectionLabel}</Card.Title>
+                    <Card.Text>{item}</Card.Text>
+                </Card.Body>
+            </Card>
+        );
+    }
+
+    getName(item) {
+        return item;
+    }
+}
+
+class ModelSelectionWidget extends BaseSelectionWidget {
+    constructor(props) {
+        super(props);
+        this.selectionLabel = "Model file";
+        this.selectionId = "model_file_select"
+        this.ariaLabel = this.selectionLabel + " selection";
+    }
+
+    renderDetail(item) {
+        return (
+            <Card bg="light" text="dark" className="mt-3 mb-3">
+                <Card.Body>
+                    <Card.Title>{this.selectionLabel}</Card.Title>
+                    <Card.Text>File: {item.file_name}</Card.Text>
+                    <Card.Text>Size: {item.size}</Card.Text>
+                    <Card.Text>Licenses: {item.repo.licenses.join(", ")}</Card.Text>
+                    <Card.Text>Papers: {item.repo.papers.join(", ")}</Card.Text>
+                    <Card.Text>Datasets: {item.repo.datasets.join(", ")}</Card.Text>
+                </Card.Body>
+            </Card>
+        );
+    }
+
+    getName(item) {
+        return item.file_name;
     }
 }
 
@@ -171,6 +229,12 @@ class NewConfigurationForm extends React.Component {
 
         this.state = {
             name: "",
+            selectedRepo: "",
+            selectedModelFile: "",
+            modelLaunchParams: {},
+            repos: [],
+            modelFiles: [],
+            installedModels: {}, // repository -> model_file mapping
             systemMessages: [],
             selectedMessageName: "",
             presets: [],
@@ -189,6 +253,8 @@ class NewConfigurationForm extends React.Component {
         this.handleSystemMessageChange = this.handleSystemMessageChange.bind(this);
         this.handlePresetChange = this.handlePresetChange.bind(this);
         this.handleSubmit = this.handleSubmit.bind(this);
+        this.handleModelRepoChange = this.handleModelRepoChange.bind(this);
+        this.handleModelFileChange = this.handleModelFileChange.bind(this);
         this.handleContextSizeChange = this.handleContextSizeChange.bind(this);
         this.handleCheck = this.handleCheck.bind(this);
     }
@@ -228,6 +294,46 @@ class NewConfigurationForm extends React.Component {
         fetcher.performFetch('/chats/supported-tools/').then(data => {
             this.setState({ supportedTools: data });
         });
+
+        fetcher.performFetch('/modelhub/installed-models/').then(entries => {
+            let groupedEntries = this.groupByRepoId(entries);
+            let repos = Object.keys(groupedEntries);
+            let selectedRepo = "";
+            let selectedModelFile = "";
+            let modelFiles = [];
+
+            if (repos.length > 0) {
+                selectedRepo = repos[0];
+                modelFiles = groupedEntries[selectedRepo];
+                if (modelFiles.length > 0) {
+                    selectedModelFile = modelFiles[0].file_name;
+                }
+            }
+
+            console.log('grouped entries', groupedEntries)
+            console.log('repos', repos, 'selected repo', selectedRepo, selectedModelFile);
+
+            this.setState({
+                repos,
+                installedModels: groupedEntries,
+                selectedRepo,
+                modelFiles,
+                selectedModelFile
+            });
+        });
+    }
+
+    groupByRepoId(entries) {
+        let result = {};
+
+        entries.forEach(modelInfo => {
+            if (!result.hasOwnProperty(modelInfo.repo_id)) {
+                result[modelInfo.repo_id] = [];
+            }
+            result[modelInfo.repo_id].push(modelInfo);
+        });
+
+        return result;
     }
 
     handleNameChange(e) {
@@ -240,6 +346,23 @@ class NewConfigurationForm extends React.Component {
 
     handlePresetChange(selectedPresetName) {
         this.setState({ selectedPresetName });
+    }
+
+    handleModelRepoChange(selectedRepo) {
+        let modelFiles = [];
+        let selectedModelFile = "";
+        if (this.state.installedModels.hasOwnProperty(selectedRepo)) {
+            modelFiles = this.state.installedModels[selectedRepo];
+        }
+
+        if (modelFiles.length > 0) {
+            selectedModelFile = modelFiles[0].file_name;
+        }
+        this.setState({ selectedRepo, modelFiles, selectedModelFile });
+    }
+
+    handleModelFileChange(selectedModelFile) {
+        this.setState({ selectedModelFile });
     }
 
     handleContextSizeChange(e) {
@@ -315,6 +438,9 @@ class NewConfigurationForm extends React.Component {
 
         // todo: display errors for other fields
 
+        console.log('state model files:', this.state.modelFiles, this.state.selectedModelFile);
+
+
         return (
             <Form onSubmit={this.handleSubmit}>
                 <Row className="mb-3">
@@ -329,6 +455,22 @@ class NewConfigurationForm extends React.Component {
                 {nameErrors.length > 0 && 
                     <div>{nameErrors}</div>
                 }
+                
+                <div className="mb-3">
+                    <RepositorySelectionWidget 
+                        items={this.state.repos}
+                        selectedName={this.state.selectedRepo}
+                        onChange={this.handleModelRepoChange} 
+                    />
+                </div>
+
+                <div className="mb-3">
+                    <ModelSelectionWidget 
+                        items={this.state.modelFiles}
+                        selectedName={this.state.selectedModelFile}
+                        onChange={this.handleModelFileChange} 
+                    />
+                </div>
 
                 <Row className="mb-3">
                     <Form.Label htmlFor="context-size" column="lg" sm={4} lg={2}>Context size</Form.Label>

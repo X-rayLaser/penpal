@@ -19,13 +19,13 @@ class PresetSerializer(serializers.ModelSerializer):
 
 
 class ConfigurationSerializer(serializers.ModelSerializer):
-
     system_message_ro = SystemMessageSerializer(source="system_message", read_only=True)
     preset_ro = PresetSerializer(source="preset", read_only=True)
 
     class Meta:
         model = Configuration
-        fields = ['id', 'name', 'context_size', 'system_message',
+        fields = ['id', 'name', 'model_repo',
+                  'file_name', 'launch_params', 'system_message',
                   'system_message_ro', 'preset', 'preset_ro', 'tools']
 
     def update(self, instance, validated_data):
