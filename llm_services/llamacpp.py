@@ -3,9 +3,9 @@ import threading
 import requests
 import time
 import json
-import uuid
 import os
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from huggingface_hub import hf_hub_download
 
 
 models_root = "installed_models"
@@ -85,7 +85,8 @@ class LLMManager:
             'file_name': file_name,
             'size': size,
             'finished': False,
-            'errors': []
+            'errors': [],
+            'started_at': time.time()
         }
         self.downloads[download_id] = download_info
 
@@ -107,7 +108,8 @@ class DownloadThread(threading.Thread):
         self.download_path = ''
 
     def run(self) -> None:
-        time.sleep(10)
+        #time.sleep(33)
+        self.download_path = hf_hub_download(self.repo_id, self.file_name, local_dir=models_root)
 
         with threading.Lock():
             self.download_info['finished'] = True

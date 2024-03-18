@@ -50,10 +50,15 @@ class ModelControlPanel extends React.Component {
         let fetcher = new GenericFetchJson();
         
         fetcher.performFetch(urlInProgress).then(downloads => {
-            this.setState({ downloads }, () => {
+            let downloadsWithStatus = downloads.map(download => ({
+                ...download,
+                elapsed: calculateElapsedSeconds(download.started_at)
+            }));
+
+            this.setState({ downloadsWithStatus }, () => {
                 fetcher.performFetch(urlListModels).then(installedModels => {
                     
-                    let cleanedDownloads = downloads.filter(download => {
+                    let cleanedDownloads = downloadsWithStatus.filter(download => {
                         let duplicates = installedModels.filter(model => 
                             download.repo_id === model.repo_id && 
                             download.file_name === model.file_name
@@ -103,6 +108,9 @@ class ModelControlPanel extends React.Component {
 
             this.state.downloads.forEach((download, index) => {
                 let status = downloadStatuses[index];
+                let elapsed = calculateElapsedSeconds(status.started_at);
+                let statusWithTiming = {...status, elapsed};
+
                 if (status.finished && status.errors.length === 0) {
                     successfulDownloads.push({
                         repo_id: status.repo_id,
@@ -111,9 +119,9 @@ class ModelControlPanel extends React.Component {
                         size: status.size
                     });
                 } else if (status.finished) {
-                    failedDownloads.push(status);
+                    failedDownloads.push(statusWithTiming);
                 } else {
-                    inProgress.push(status);
+                    inProgress.push(statusWithTiming);
                 }
             });
 
@@ -144,7 +152,8 @@ class ModelControlPanel extends React.Component {
                 repo,
                 repo_id: repo.id,
                 file_name: fileName,
-                size: fileSize
+                size: fileSize,
+                started_at: (new Date()) / 1000
             }]
         }));
         fetcher.performFetch(url);
@@ -152,11 +161,18 @@ class ModelControlPanel extends React.Component {
     render() {
         let downloads = this.state.downloads;
         let downloadsInProgress = downloads.map((modelInfo, index) => 
-            <ListGroup.Item key={index} variant="secondary">
-                {`Installing a model: ${modelInfo.repo_id}--${modelInfo.file_name}... `}
-                <Spinner animation="border" role="status">
-                </Spinner>
-            </ListGroup.Item>
+            <Card key={index} variant="secondary">
+                <Card.Body>
+                    <Card.Title>
+                        {`Installing a model: ${modelInfo.repo_id}--${modelInfo.file_name}... `}
+                        <Spinner animation="border" role="status">
+                        </Spinner>
+                    </Card.Title>
+                    {modelInfo.elapsed && (
+                        <Card.Subtitle>Elapsed time: {formatTimeElapsed(modelInfo.elapsed)}</Card.Subtitle>
+                    )}
+                </Card.Body>
+            </Card>
         );
 
         let installedModels = this.state.installedModels.map((modelInfo, index) =>
@@ -202,7 +218,7 @@ class ModelControlPanel extends React.Component {
         return (
             <div>
                 {downloadsInProgress.length > 0 && (
-                    <ListGroup className="mt-3">{downloadsInProgress}</ListGroup>
+                    <div className="mt-3">{downloadsInProgress}</div>
                 )}
 
                 {installedModels.length > 0 && (
@@ -514,6 +530,21 @@ function containsModel(models, repo_id, file_name) {
     );
 
     return matches.length > 0;
+}
+
+
+function calculateElapsedSeconds(t0) {
+    let now = (new Date()) / 1000;
+    return Math.round(now - t0);
+}
+
+
+function formatTimeElapsed(numSeconds) {
+    let date = new Date(0);
+    date.setSeconds(numSeconds);
+    let indexStart = 11;
+    let indexEnd = 19;
+    return date.toISOString().substring(indexStart, indexEnd);
 }
 
 
