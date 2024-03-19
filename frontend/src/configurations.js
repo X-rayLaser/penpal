@@ -223,6 +223,151 @@ class PresetSelectionWidget extends BaseSelectionWidget {
 }
 
 
+class ModelLaunchConfig extends React.Component {
+    constructor(props) {
+        super(props);
+
+        this.state = this.defaultLaunchParams;
+
+        this.handleContextSizeChange = this.handleContextSizeChange.bind(this);
+        this.handleNglChange = this.handleNglChange.bind(this);
+        this.handleNumThreadsChange = this.handleNumThreadsChange.bind(this);
+        this.handleNumBatchThreadsChange = this.handleNumBatchThreadsChange.bind(this);
+        this.handleBatchSizeChange = this.handleBatchSizeChange.bind(this);
+        this.handleMaxTokensChange = this.handleMaxTokensChange.bind(this);
+    }
+
+    get defaultLaunchParams() {
+        return {...this.constructor.defaultLaunchParams};
+    }
+
+    handleContextSizeChange(e) {
+        this.updateStateField("contextSize", e);
+    }
+
+    handleNglChange(e) {
+        this.updateStateField("ngl", e);
+    }
+
+    handleNumThreadsChange(e) {
+        this.updateStateField("numThreads", e);
+    }
+
+    handleNumBatchThreadsChange(e) {
+        this.updateStateField("numBatchThreads", e);
+    }
+
+    handleBatchSizeChange(e) {
+        this.updateStateField("batchSize", e);
+    }
+
+    handleMaxTokensChange(e) {
+        this.updateStateField("nPredict", e);
+    }
+
+    updateStateField(field, event) {
+        let update = {};
+        let value = event.target.value;
+        let intValue;
+
+        if (!value) {
+            intValue = 0;
+        } else {
+            try {
+                intValue = parseInt(value);
+            } catch (e) {
+                console.error("Parsing error, value:", value);
+                intValue = 0;
+            }
+        }
+
+        if (isNaN(intValue)) {
+            intValue = 0;
+        }
+
+        update[field] = intValue;
+        this.setState(update, () => this.notify());
+    }
+
+    notify() {
+        this.props.onChange(this.state);
+    }
+
+    render() {
+        return (
+            <div>
+                <Row className="mb-3">
+                    <Form.Label htmlFor="config_context_size" column="lg" sm={6} lg={4}>Context size</Form.Label>
+                    <Col>
+                        <Form.Control size="lg" id="config_context_size" name="context-size" type="number"
+                                            placeholder="Context size of your LLM" 
+                                            value={this.state.contextSize}
+                                            onChange={this.handleContextSizeChange} />
+                    </Col>
+                </Row>
+                <Row className="mb-3">
+                    <Form.Label htmlFor="config_gpu_layers" column="lg" sm={6} lg={4}># GPU layers</Form.Label>
+                    <Col>
+                        <Form.Control size="lg" id="config_gpu_layers" name="context-size" type="number"
+                                            placeholder="Number of loaded GPU layers"
+                                            value={this.state.ngl}
+                                            onChange={this.handleNglChange} />
+                    </Col>
+                </Row>
+                <Row className="mb-3">
+                    <Form.Label htmlFor="config_num_gen_threads" column="lg" sm={6} lg={4}># threads for generation</Form.Label>
+                    <Col>
+                        <Form.Control size="lg" id="config_num_gen_threads" name="num_generation_threads" type="number"
+                                            placeholder="Number of threads to use during generation"
+                                            value={this.state.numThreads}
+                                            onChange={this.handleNumThreadsChange} />
+                    </Col>
+                </Row>
+
+                <Row className="mb-3">
+                    <Form.Label htmlFor="config_num_batch_threads" column="lg" sm={6} lg={4}># batch threads</Form.Label>
+                    <Col>
+                        <Form.Control size="lg" id="config_num_batch_threads" name="num_batch_threads" type="number"
+                                            placeholder="Number of threads used during batch processing"
+                                            value={this.state.numBatchThreads}
+                                            onChange={this.handleNumBatchThreadsChange} />
+                    </Col>
+                </Row>
+
+                <Row className="mb-3">
+                    <Form.Label htmlFor="config_batch_size" column="lg" sm={6} lg={4}>Batch size</Form.Label>
+                    <Col>
+                        <Form.Control size="lg" id="config_batch_size" name="batch_size" type="number"
+                                            placeholder="Size of batch for prompt processing"
+                                            value={this.state.batchSize}
+                                            onChange={this.handleBatchSizeChange} />
+                    </Col>
+                </Row>
+
+                <Row className="mb-3">
+                    <Form.Label htmlFor="config_n_predict" column="lg" sm={6} lg={4}># tokens to predict</Form.Label>
+                    <Col>
+                        <Form.Control size="lg" id="config_n_predict" name="n_predict" type="number"
+                                            placeholder="Maximum number of tokens to predict"
+                                            value={this.state.nPredict}
+                                            onChange={this.handleMaxTokensChange} />
+                    </Col>
+                </Row>
+            </div>
+        );
+    }
+}
+
+
+ModelLaunchConfig.defaultLaunchParams = {
+    contextSize: 512,
+    ngl: 0,
+    numThreads: 2,
+    numBatchThreads: 2,
+    batchSize: 512,
+    nPredict: 512
+};
+
 class NewConfigurationForm extends React.Component {
     constructor(props) {
         super(props);
@@ -231,7 +376,7 @@ class NewConfigurationForm extends React.Component {
             name: "",
             selectedRepo: "",
             selectedModelFile: "",
-            modelLaunchParams: {},
+            launchConfig: ModelLaunchConfig.defaultLaunchParams,
             repos: [],
             modelFiles: [],
             installedModels: {}, // repository -> model_file mapping
@@ -244,7 +389,6 @@ class NewConfigurationForm extends React.Component {
             nameToPreset: {},
             loadingSystemMessages: true,
             loadingPresets: true,
-            contextSize: 512,
             tools: [],
             supportedTools: []
         };
@@ -255,7 +399,7 @@ class NewConfigurationForm extends React.Component {
         this.handleSubmit = this.handleSubmit.bind(this);
         this.handleModelRepoChange = this.handleModelRepoChange.bind(this);
         this.handleModelFileChange = this.handleModelFileChange.bind(this);
-        this.handleContextSizeChange = this.handleContextSizeChange.bind(this);
+        this.handleLaunchConfChanged = this.handleLaunchConfChanged.bind(this);
         this.handleCheck = this.handleCheck.bind(this);
     }
 
@@ -310,9 +454,6 @@ class NewConfigurationForm extends React.Component {
                 }
             }
 
-            console.log('grouped entries', groupedEntries)
-            console.log('repos', repos, 'selected repo', selectedRepo, selectedModelFile);
-
             this.setState({
                 repos,
                 installedModels: groupedEntries,
@@ -365,10 +506,6 @@ class NewConfigurationForm extends React.Component {
         this.setState({ selectedModelFile });
     }
 
-    handleContextSizeChange(e) {
-        this.setState({ contextSize: e.target.value });
-    }
-
     handleCheck(checked, name) {
         
         this.setState(prevState => {
@@ -387,6 +524,10 @@ class NewConfigurationForm extends React.Component {
 
     }
 
+    handleLaunchConfChanged(launchConfig) {
+        this.setState({ launchConfig });
+    }
+
     handleSubmit(e) {
         e.preventDefault();
         
@@ -395,7 +536,9 @@ class NewConfigurationForm extends React.Component {
 
         let data = {
             name: this.state.name,
-            context_size: this.state.contextSize,
+            model_repo: this.state.selectedRepo,
+            file_name: this.state.selectedModelFile,
+            launch_params: this.state.launchConfig,
             system_message: message.id,
             preset: preset.id,
             tools: this.state.tools
@@ -472,15 +615,14 @@ class NewConfigurationForm extends React.Component {
                     />
                 </div>
 
-                <Row className="mb-3">
-                    <Form.Label htmlFor="context-size" column="lg" sm={4} lg={2}>Context size</Form.Label>
-                    <Col>
-                        <Form.Control size="lg" id="context-size" name="context-size" type="number"
-                                        placeholder="Context size of your LLM" 
-                                        value={this.state.contextSize}
-                                        onChange={this.handleContextSizeChange} />
-                    </Col>
-                </Row>
+                <Accordion className="mb-3">
+                    <Accordion.Item eventKey="0">
+                        <Accordion.Header>Model launch parameters</Accordion.Header>
+                        <Accordion.Body>
+                            <ModelLaunchConfig onChange={this.handleLaunchConfChanged} />
+                        </Accordion.Body>
+                    </Accordion.Item>
+                </Accordion>
 
                 <div className="mb-3">
                     <SystemMessageSelectionWidget items={this.state.systemMessages}
@@ -546,11 +688,13 @@ class ConfigurationsPage extends ItemListWithForm {
                 </ListGroup.Item>
             );
         });
+
         return (
             <Card key={index} className="mb-3">
                 <Card.Header>{item.name}</Card.Header>
                 <Card.Body>
-                    <div className="mb-3">Context size: {item.context_size}</div>
+                    <div className="mb-3">Repository: {item.model_repo}</div>
+                    <div className="mb-3">Model file: {item.file_name}</div>
 
                     <Accordion className="mb-3">
                         <Accordion.Item eventKey="0">
@@ -561,6 +705,17 @@ class ConfigurationsPage extends ItemListWithForm {
                             <Accordion.Header>Generation preset: {preset.name}</Accordion.Header>
                             <Accordion.Body>
                                 <Preset preset={preset} />
+                            </Accordion.Body>
+                        </Accordion.Item>
+                        <Accordion.Item eventKey="2">
+                            <Accordion.Header>Model launch parameters</Accordion.Header>
+                            <Accordion.Body>
+                                <div>Context size: {item.launch_params.contextSize}</div>
+                                <div># GPU layers: {item.launch_params.ngl}</div>
+                                <div># threads for generation: {item.launch_params.numThreads}</div>
+                                <div># batch threads: {item.launch_params.numBatchThreads}</div>
+                                <div>Batch size: {item.launch_params.batchSize}</div>
+                                <div># tokens to predict: {item.launch_params.nPredict}</div>
                             </Accordion.Body>
                         </Accordion.Item>
                     </Accordion>
