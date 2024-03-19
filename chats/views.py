@@ -47,13 +47,14 @@ def generate_completion(request):
     if request.method == 'POST':
         body = json.loads(request.body)
         prompt = body.get("prompt")
+        inference_config = body.get("inference_config")
         llm_settings = body.get("llm_settings", {})
         clear_context = body.get("clear_context", False)
 
         if prompt:
             print("about to start streaming. Prompt:", prompt)
             response = StreamingHttpResponse(
-                llm_utils.stream_tokens(prompt, clear_context, llm_settings)
+                llm_utils.stream_tokens(prompt, inference_config, clear_context, llm_settings)
             )
             return response
         return HttpResponseBadRequest("Expected 'prompt' field in json request body")

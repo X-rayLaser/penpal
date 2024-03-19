@@ -1,5 +1,5 @@
 class TokenGenerator:
-    def stream_tokens(self, prompt, clear_context=False, llm_settings=None):
+    def stream_tokens(self, prompt, inference_config=None, clear_context=False, llm_settings=None):
         raise NotImplementedError
 
 

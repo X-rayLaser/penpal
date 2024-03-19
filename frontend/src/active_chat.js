@@ -524,7 +524,15 @@ class ActiveChat extends React.Component {
             repeat_penalty: this.state.repeat_penalty
         };
 
-        generateResponse(prompt, llmSettings, handleChunk, handlePause, handleDone, handleError);
+        let inferenceConfig = {
+            repo_id: this.state.configuration.model_repo,
+            file_name: this.state.configuration.file_name,
+            launch_params: this.state.configuration.launch_params
+        };
+
+        generateResponse(
+            prompt, inferenceConfig, llmSettings, handleChunk, handlePause, handleDone, handleError
+        );
     }
 
     preparePrompt(leaf) {

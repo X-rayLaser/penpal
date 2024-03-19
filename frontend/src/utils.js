@@ -20,12 +20,13 @@ export const withRouter = WrappedComponent => props => {
 };
 
 
-export function generateResponse(prompt, llmSettings, onChunk, onPaused, onDone, onError) {
+export function generateResponse(prompt, inferenceConfig, llmSettings, onChunk, onPaused, onDone, onError) {
     let generatedText = "";
     let lastChunk = "";
 
     let body = {
         prompt,
+        inference_config: inferenceConfig,
         clear_context: true,
         llm_settings: llmSettings
     };
@@ -62,7 +63,7 @@ export function generateResponse(prompt, llmSettings, onChunk, onPaused, onDone,
     
                     onPaused(finalizedSegment);
                     let newPrompt = prompt + finalizedSegment;
-                    generateResponse(newPrompt, llmSettings, onChunk, onPaused, onDone, onError);
+                    generateResponse(newPrompt, inferenceConfig, llmSettings, onChunk, onPaused, onDone, onError);
                 });
             } else {
                 console.log("API call not found");

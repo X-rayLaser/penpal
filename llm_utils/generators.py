@@ -8,9 +8,23 @@ class RemoteLLM(TokenGenerator):
         self.host = host
         self.port = port
 
-    def stream_tokens(self, prompt, clear_context=False, llm_settings=None):
+    def stream_tokens(self, prompt, inference_config=None, clear_context=False, llm_settings=None):
         llm_settings = llm_settings or {}
+        inference_config = inference_config or {}
         clean_llm_settings(llm_settings)
+
+        start_llm_url = f"http://{self.host}:{self.port}/start-llm"
+        data = {
+            'repo_id': inference_config.get('model_repo'),
+            'file_name': inference_config.get('file_name'),
+            'launch_params': inference_config.get('launch_params')
+        }
+
+        headers = {'Content-Type': 'application/json'}
+
+        resp = requests.post(start_llm_url, data=json.dumps(data), headers=headers)
+        if resp.status_code != 200:
+            raise PrepareModelError("Failed to configure and start model")
 
         if clear_context:
             url = f"http://{self.host}:{self.port}/clear-context"
@@ -25,7 +39,7 @@ class RemoteLLM(TokenGenerator):
         payload = {"prompt": prompt, "stream": True, "stop": [stop_word]}
         payload.update(llm_settings)
 
-        headers = {'Content-Type': 'application/json'}
+        
         resp = requests.post(url, data=json.dumps(payload), headers=headers, stream=True)
         for line in resp.iter_lines(chunk_size=1):
             if line:
@@ -117,4 +131,8 @@ def clean_any_field(llm_settings, field, target_type):
 
 
 class ClearContextError(Exception):
+    pass
+
+
+class PrepareModelError(Exception):
     pass

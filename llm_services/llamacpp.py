@@ -15,24 +15,27 @@ models_registry = os.path.join(models_root, "models_registry.json")
 class LLMManager:
     def __init__(self):
         self.executable_path = ""
-        self.model_path = ""
         self.host = ""
         self.port = ""
         self.context_size = ""
 
+        self.model_path = ""
+        self.launch_config = {}
+
         self.process = None
         self.printing_thread = None
-        self.download_threads = []
 
+        self.download_threads = []
         self.downloads = {}
 
-    def setup(self, exec_path, model_path, host, port, num_gpu_layers=0, context_size=512):
+    def setup(self, exec_path, host, port):
         self.executable_path = exec_path
-        self.model_path = model_path
         self.host = host
         self.port = str(port)
-        self.num_gpu_layers = str(num_gpu_layers)
-        self.context_size = str(context_size)
+
+    def configure_launch(self, model_path, launch_config):
+        self.model_path = model_path
+        self.launch_config = launch_config
 
     def generate(self, data, content_type):
         if self.process is None:
@@ -56,11 +59,25 @@ class LLMManager:
                 time.sleep(1)
 
     def restart_llm(self):
+        if not self.model_path:
+            raise Exception('Improperfly configured: no model path set')
+
+        context_size = self.launch_config.get('contextSize', 512)
+        num_gpu_layers = self.launch_config.get('ngl', 0)
+        num_threads = self.launch_config.get('numThreads', 2)
+        num_batch_threads = self.launch_config.get('numBatchThreads', num_threads)
+        batch_size = self.launch_config.get('batchSize', 512)
+        n_predict = self.launch_config.get('nPredict', -1)
+
         popen_args = [
             self.executable_path,
-            "-m", self.model_path,
-            "-c", self.context_size,
-            "-ngl", self.num_gpu_layers,
+            "--model", self.model_path,
+            "--threads", str(num_threads),
+            #"--threads-batch", str(num_batch_threads),
+            "--ctx-size", str(context_size),
+            "--n-gpu-layers", str(num_gpu_layers),
+            "--batch-size", str(batch_size),
+            #"--n-predict", str(n_predict),
             "--host", self.host,
             "--port", self.port
         ]
@@ -109,6 +126,8 @@ class DownloadThread(threading.Thread):
 
     def run(self) -> None:
         #time.sleep(33)
+
+        # todo: save model under corresponding repo_id folder
         self.download_path = hf_hub_download(self.repo_id, self.file_name, local_dir=models_root)
 
         with threading.Lock():
@@ -179,6 +198,8 @@ class HttpHandler(BaseHTTPRequestHandler):
             self.handle_download()
         elif self.path == '/download-status':
             self.handle_download_status()
+        elif self.path == '/start-llm':
+            self.handle_start_llm()
         else:
             print("Unsupprted path", self.path)
             self.send_response(404)
@@ -247,8 +268,6 @@ class HttpHandler(BaseHTTPRequestHandler):
         self.send_json_response(status_code=200, response_data=in_progress)
 
     def handle_list_models(self):
-        models_root = "installed_models"
-        models_registry = os.path.join(models_root, "models_registry.json")
         if os.path.exists(models_registry):
             with open(models_registry) as f:
                 content = f.read()
@@ -263,6 +282,25 @@ class HttpHandler(BaseHTTPRequestHandler):
             response_data = []
 
         self.send_json_response(status_code=200, response_data=response_data)
+
+    def handle_start_llm(self):
+        data = self.parse_json_body()
+        repo_id = data.get('repo_id')
+        model_file = data.get('file_name')
+        launch_config = data.get('launch_params')
+
+        model_path = os.path.join(models_root, model_file)
+
+        print("repo_id", repo_id, "model_file", model_file)
+        print("launch config", launch_config)
+
+        if os.path.exists(model_path):
+            if llm_manager.model_path != model_path or llm_manager.launch_config != launch_config:
+                llm_manager.configure_launch(model_path, launch_config)
+                llm_manager.restart_llm()
+            self.send_json_response(status_code=200, response_data={'ok': 'ok'})
+        else:
+            self.send_json_response(status_code=404, response_data={'reason': 'Not found'})
 
     def parse_json_body(self):
         content_len = int(self.headers.get('Content-Length'))
@@ -283,20 +321,13 @@ if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser()
-
-    parser.add_argument("model", type=str)
     parser.add_argument("--host", type=str, default="0.0.0.0")
     parser.add_argument("--port", type=int, default=9000)
-    parser.add_argument("--ngl", type=int, default=0)
-    parser.add_argument("-c", type=int, default=1024, help="Context size of the model")
     args = parser.parse_args()
 
     llm_manager.setup(exec_path="./llama.cpp/server",
-                      model_path=args.model,
                       host="localhost",
-                      port=9500,
-                      num_gpu_layers=args.ngl,
-                      context_size=args.c)
+                      port=9500)
 
     server = HTTPServer((args.host, args.port), HttpHandler)
     server.serve_forever()
