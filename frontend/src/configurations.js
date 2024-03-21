@@ -12,6 +12,7 @@ import Tab from 'react-bootstrap/Tab';
 import Tabs from 'react-bootstrap/Tabs';
 
 import { ItemListWithForm, GenericFetchJson } from "./generic_components";
+import { renderSize } from './utils';
 import { Preset } from "./presets";
 import { withRouter } from "./utils";
 
@@ -22,6 +23,7 @@ class BaseSelectionWidget extends React.Component {
         this.selectionLabel = "Item";
         this.selectionId = "item_select"
         this.ariaLabel = this.selectionLabel + " selection";
+        this.blankOptionText = "";
     }
     renderDetail(item) {
         return (
@@ -74,6 +76,7 @@ class BaseSelectionWidget extends React.Component {
                                     aria-label={this.ariaLabel}
                                     value={props.selectedName}
                                     onChange={changeHandler}>
+                        {this.blankOptionText && (<option value="">{this.blankOptionText}</option>)}
                         {items}
                         </Form.Select>
                     </Col>
@@ -90,8 +93,10 @@ class SystemMessageSelectionWidget extends BaseSelectionWidget {
         this.selectionLabel = "System message";
         this.selectionId = "system_message_select"
         this.ariaLabel = this.selectionLabel + " selection";
+        this.blankOptionText = "--No system message--";
     }
     renderDetail(item) {
+        console.log("selectedMessage: ", this.props.selectedName)
         return (
             <Card bg="light" text="dark" className="mt-3 mb-3">
                 <Card.Body>
@@ -142,7 +147,7 @@ class ModelSelectionWidget extends BaseSelectionWidget {
                 <Card.Body>
                     <Card.Title>{this.selectionLabel}</Card.Title>
                     <Card.Text>File: {item.file_name}</Card.Text>
-                    <Card.Text>Size: {item.size}</Card.Text>
+                    <Card.Text>Size: {renderSize(item.size)}</Card.Text>
                     <Card.Text>Licenses: {item.repo.licenses.join(", ")}</Card.Text>
                     <Card.Text>Papers: {item.repo.papers.join(", ")}</Card.Text>
                     <Card.Text>Datasets: {item.repo.datasets.join(", ")}</Card.Text>
@@ -415,7 +420,7 @@ class NewConfigurationForm extends React.Component {
 
             this.setState({
                 systemMessages: data,
-                selectedMessageName: data[0].name,
+                selectedMessageName: "",
                 nameToMessage,
                 loadingSystemMessages: false
             })
@@ -530,8 +535,6 @@ class NewConfigurationForm extends React.Component {
 
     handleSubmit(e) {
         e.preventDefault();
-        
-        let message = this.state.nameToMessage[this.state.selectedMessageName];
         let preset = this.state.nameToPreset[this.state.selectedPresetName];
 
         let data = {
@@ -539,10 +542,14 @@ class NewConfigurationForm extends React.Component {
             model_repo: this.state.selectedRepo,
             file_name: this.state.selectedModelFile,
             launch_params: this.state.launchConfig,
-            system_message: message.id,
             preset: preset.id,
             tools: this.state.tools
         };
+
+        if (this.state.selectedMessageName) {
+            let message = this.state.nameToMessage[this.state.selectedMessageName];
+            data.system_message = message.id;
+        }
 
         console.log(data);
         this.props.onSubmit(data);
@@ -581,7 +588,7 @@ class NewConfigurationForm extends React.Component {
 
         // todo: display errors for other fields
 
-        console.log('state model files:', this.state.modelFiles, this.state.selectedModelFile);
+        console.log('selected message name', this.state.selectedMessageName);
 
 
         return (
@@ -667,8 +674,6 @@ class ConfigurationsPage extends ItemListWithForm {
     }
 
     renderItem(item, index, handleDeleteItem) {
-        console.log(item)
-
         let preset = {
             name: item.preset_ro.name,
             settings: {
@@ -697,10 +702,12 @@ class ConfigurationsPage extends ItemListWithForm {
                     <div className="mb-3">Model file: {item.file_name}</div>
 
                     <Accordion className="mb-3">
-                        <Accordion.Item eventKey="0">
-                            <Accordion.Header>System message: {item.system_message_ro.name}</Accordion.Header>
-                            <Accordion.Body>{item.system_message_ro.text}</Accordion.Body>
-                        </Accordion.Item>
+                        {item.system_message_ro && (
+                            <Accordion.Item eventKey="0">
+                                <Accordion.Header>System message: {item.system_message_ro.name}</Accordion.Header>
+                                <Accordion.Body>{item.system_message_ro.text}</Accordion.Body>
+                            </Accordion.Item>
+                        )}
                         <Accordion.Item eventKey="1">
                             <Accordion.Header>Generation preset: {preset.name}</Accordion.Header>
                             <Accordion.Body>

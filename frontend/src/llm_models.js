@@ -12,6 +12,7 @@ import Badge from 'react-bootstrap/Badge';
 import Stack from 'react-bootstrap/Stack';
 import Spinner from 'react-bootstrap/Spinner';
 import Card from 'react-bootstrap/Card';
+import { renderSize } from './utils';
 import { GenericFetchJson } from './generic_components';
 import { withRouter } from "./utils";
 
@@ -581,32 +582,6 @@ function ModelDownload(props) {
             )}
         </div>
     );
-}
-
-
-function renderSize(size) {
-    const KB = 1000
-    const MB = KB * 1000;
-    const GB = MB * 1000;
-
-    let newSize;
-    let units;
-    if (size > GB) {
-        newSize = size / GB;
-        units = 'GB';
-    } else if (size > MB) {
-        newSize = size / MB;
-        units = 'MB';
-    } else if (size > KB) {
-        newSize = size / KB;
-        units = 'KB';
-        
-    } else {
-        newSize = size;
-        units = 'B';
-    }
-
-    return `${Math.round(newSize * 10) / 10} ${units}`;
 }
 
 
