@@ -31,6 +31,10 @@ def get_downloads_in_progress():
     return token_generator.downloads_in_progress()
 
 
+def get_failed_downloads():
+    return token_generator.failed_downloads()
+
+
 def get_download_status(repo_id, file_name):
     return token_generator.download_status(repo_id, file_name)
 

@@ -69,7 +69,12 @@ class ManagedRemoteLLM(RemoteLLM):
         """Begins downloading a LLM on the server"""
         url = self.make_full_url("/download-llm")
         body = dict(repo=repo, file_name=file_name, size=size)
-        return self.post_json(url, body)['download_id']
+        headers = {'Content-Type': 'application/json'}
+        resp = requests.post(url, data=json.dumps(body), headers=headers)
+        obj = resp.json()
+        if resp.status_code != 200:
+            raise DownloadStartFailed(obj)
+        return obj['download_id']
 
     def download_status(self, repo_id, file_name):
         url = self.make_full_url("/download-status")
@@ -78,6 +83,11 @@ class ManagedRemoteLLM(RemoteLLM):
 
     def downloads_in_progress(self):
         url = self.make_full_url("/downloads-in-progress")
+        resp = requests.get(url)
+        return resp.json()
+
+    def failed_downloads(self):
+        url = self.make_full_url("/failed-downloads")
         resp = requests.get(url)
         return resp.json()
 
@@ -135,4 +145,8 @@ class ClearContextError(Exception):
 
 
 class PrepareModelError(Exception):
+    pass
+
+
+class DownloadStartFailed(Exception):
     pass

@@ -125,10 +125,13 @@ class DownloadThread(threading.Thread):
         self.download_path = ''
 
     def run(self) -> None:
-        #time.sleep(33)
-
         # todo: save model under corresponding repo_id folder
-        self.download_path = hf_hub_download(self.repo_id, self.file_name, local_dir=models_root)
+        try:
+            self.download_path = hf_hub_download(self.repo_id, self.file_name, local_dir=models_root)
+        except Exception as e:
+            self.download_info['finished'] = True
+            self.download_info['errors'] = [str(e)]
+            return
 
         with threading.Lock():
             self.download_info['finished'] = True
@@ -210,6 +213,8 @@ class HttpHandler(BaseHTTPRequestHandler):
 
         if self.path == '/downloads-in-progress':
             self.handle_downloads_inprogress()
+        elif self.path == '/failed-downloads':
+            self.handle_failed_downloads()
         elif self.path == '/list-models':
             self.handle_list_models()
         else:
@@ -244,8 +249,31 @@ class HttpHandler(BaseHTTPRequestHandler):
     def handle_download(self):
         body = self.parse_json_body()
         repo = body.get('repo')
+        repo_id = repo['id']
         file_name = body.get('file_name')
         size = body.get('size')
+
+
+        registry = self.get_models_registry()
+        installed_matches = [info for info in registry 
+                             if info['repo_id'] == repo_id and info['file_name'] == file_name]
+        
+        if installed_matches:
+            response_data = dict(reason="Model already downloaded")
+            self.send_json_response(status_code=400, response_data=response_data)
+            return
+        
+        download = llm_manager.downloads.get((repo_id, file_name))
+        if download:
+            if not download['finished']:
+                response_data = dict(reason="Model download is already in progress")
+                self.send_json_response(status_code=400, response_data=response_data)
+                return
+            
+            if download['finished'] and not download['errors']:
+                response_data = dict(reason="Model was just installed")
+                self.send_json_response(status_code=400, response_data=response_data)
+                return
 
         download_id = llm_manager.start_download(repo, file_name, size)
         response_data = dict(download_id=download_id)
@@ -267,19 +295,20 @@ class HttpHandler(BaseHTTPRequestHandler):
                        if not info['finished']]
         self.send_json_response(status_code=200, response_data=in_progress)
 
-    def handle_list_models(self):
-        if os.path.exists(models_registry):
-            with open(models_registry) as f:
-                content = f.read()
-            registry = json.loads(content)
+    def handle_failed_downloads(self):
+        failed = [info for info in llm_manager.downloads.values()
+                  if info['finished'] and info['errors']]
 
-            response_data = []
-            for model in registry:
-                fields = ['repo_id', 'repo', 'file_name', 'size']
-                item = {key: model.get(key, '') for key in fields}
-                response_data.append(item)
-        else:
-            response_data = []
+        self.send_json_response(status_code=200, response_data=failed)
+
+    def handle_list_models(self):
+        registry = self.get_models_registry()
+        
+        response_data = []
+        for model in registry:
+            fields = ['repo_id', 'repo', 'file_name', 'size']
+            item = {key: model.get(key, '') for key in fields}
+            response_data.append(item)
 
         self.send_json_response(status_code=200, response_data=response_data)
 
@@ -301,6 +330,15 @@ class HttpHandler(BaseHTTPRequestHandler):
             self.send_json_response(status_code=200, response_data={'ok': 'ok'})
         else:
             self.send_json_response(status_code=404, response_data={'reason': 'Not found'})
+
+    def get_models_registry(self):
+        if os.path.exists(models_registry):
+            with open(models_registry) as f:
+                content = f.read()
+            registry = json.loads(content)
+        else:
+            registry = []
+        return registry
 
     def parse_json_body(self):
         content_len = int(self.headers.get('Content-Length'))

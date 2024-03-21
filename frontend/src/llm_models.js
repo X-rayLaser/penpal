@@ -79,7 +79,7 @@ class ModelControlPanel extends React.Component {
     }
 
     syncFailedDownloads() {
-        //this.syncStateLists('/modelhub/failed-downloads/', "failedDownloads");
+        this.syncStateLists('/modelhub/failed-downloads/', "failedDownloads");
     }
 
     syncStateLists(url, listKey) {
@@ -119,7 +119,7 @@ class ModelControlPanel extends React.Component {
                         size: status.size
                     });
                 } else if (status.finished) {
-                    failedDownloads.push(statusWithTiming);
+                    failedDownloads.push(status);
                 } else {
                     inProgress.push(statusWithTiming);
                 }
@@ -128,25 +128,12 @@ class ModelControlPanel extends React.Component {
             this.setState({
                 downloads: inProgress,
                 installedModels: [...this.state.installedModels, ...successfulDownloads],
-                failedDownloads,
+                failedDownloads: [...this.state.failedDownloads, ...failedDownloads],
             })
         });
     }
 
-    handleStartDownload(repo, fileName, fileSize) {
-        console.log("starting download:", repo, fileName, fileSize);
-        const url = '/modelhub/start-download/';
-
-        let download = {
-            repo,
-            file_name: fileName,
-            size: fileSize
-        };
-
-        let fetcher = new GenericFetchJson();
-        fetcher.method = "POST";
-        fetcher.body = download;
-    
+    handleStartDownload(repo, fileName, fileSize) {    
         this.setState(prevState => ({
             downloads: [...prevState.downloads, {
                 repo,
@@ -156,12 +143,11 @@ class ModelControlPanel extends React.Component {
                 started_at: (new Date()) / 1000
             }]
         }));
-        fetcher.performFetch(url);
     }
     render() {
         let downloads = this.state.downloads;
         let downloadsInProgress = downloads.map((modelInfo, index) => 
-            <Card key={index} variant="secondary">
+            <Card key={index} bg="secondary" text="light">
                 <Card.Body>
                     <Card.Title>
                         {`Installing a model: ${modelInfo.repo_id}--${modelInfo.file_name}... `}
@@ -170,6 +156,17 @@ class ModelControlPanel extends React.Component {
                     </Card.Title>
                     {modelInfo.elapsed && (
                         <Card.Subtitle>Elapsed time: {formatTimeElapsed(modelInfo.elapsed)}</Card.Subtitle>
+                    )}
+                </Card.Body>
+            </Card>
+        );
+
+        let failedDownloads = this.state.failedDownloads.map((modelInfo, index) => 
+            <Card key={index} variant="secondary" bg="danger" text="white" className="mb-3">
+                <Card.Body>
+                    <Card.Title>Download failed for {modelInfo.repo_id}--{modelInfo.file_name}</Card.Title>
+                    {modelInfo.errors.map((error, errorId) => 
+                        <Card.Text key={errorId}>{error}</Card.Text>
                     )}
                 </Card.Body>
             </Card>
@@ -217,9 +214,14 @@ class ModelControlPanel extends React.Component {
 
         return (
             <div>
-                {downloadsInProgress.length > 0 && (
-                    <div className="mt-3">{downloadsInProgress}</div>
-                )}
+                <div>
+                    {failedDownloads.length > 0 && (
+                        <div className="mt-3">{failedDownloads}</div>
+                    )}
+                    {downloadsInProgress.length > 0 && (
+                        <div className="mt-3">{downloadsInProgress}</div>
+                    )}
+                </div>
 
                 {installedModels.length > 0 && (
                     <div className="mt-3">
@@ -245,6 +247,8 @@ class HuggingfaceHubRepositoryViewer extends React.Component {
             searchTerm: "",
             foundItems: [],
             ggufFiles: [],
+            pendingDownloads: [],
+            launchFailures: [],
             selectedFileIndex: null, 
             detailLoading: false,
             searching: false,
@@ -255,6 +259,7 @@ class HuggingfaceHubRepositoryViewer extends React.Component {
         this.handleSubmit = this.handleSubmit.bind(this);
         this.handleAccordionSelect = this.handleAccordionSelect.bind(this);
         this.handleFileItemClick = this.handleFileItemClick.bind(this);
+        this.handleStartDownload = this.handleStartDownload.bind(this);
     }
 
     handleTermChange(e) {
@@ -301,6 +306,75 @@ class HuggingfaceHubRepositoryViewer extends React.Component {
         this.setState({ selectedFileIndex: fileIndex });
     }
 
+    handleStartDownload(repo, fileName, fileSize) {
+        console.log("starting download:", repo, fileName, fileSize);
+        const url = '/modelhub/start-download/';
+
+        let download = {
+            repo,
+            repo_id: repo.id,
+            file_name: fileName,
+            size: fileSize
+        };
+
+        let fetcher = new GenericFetchJson();
+        fetcher.method = "POST";
+        fetcher.body = download;
+        fetcher.messages["5xx"] = "Failed to start download. Check that LLM server is available."
+    
+        function removeDownload(arr) {
+            return arr.filter(d => 
+                !(d.repo_id === repo.id && d.file_name === fileName)
+            );
+        }
+
+        this.setState(prevState => {
+            let pendingDownloads = removeDownload(prevState.pendingDownloads);
+            let launchFailures = removeDownload(prevState.launchFailures);
+            pendingDownloads.push(download);
+            
+            return {
+                pendingDownloads,
+                launchFailures
+            };
+        });
+
+        fetcher.performFetch(url).then(obj => {
+            this.props.onStartDownload(repo, fileName, fileSize);
+
+            this.setState(prevState => {
+                let pendingDownloads = removeDownload(prevState.pendingDownloads);
+                let launchFailures = removeDownload(prevState.launchFailures);
+
+                return {
+                    pendingDownloads,
+                    launchFailures
+                };
+
+            });
+        }).catch(errorObject => {
+            this.setState(prevState => {
+                let failure = {
+                    ...download,
+                    error: errorObject.error
+                };
+
+                let pendingDownloads = removeDownload(prevState.pendingDownloads);
+                let launchFailures = removeDownload(prevState.launchFailures);
+                launchFailures.push(failure);
+
+                console.log("state:", pendingDownloads, launchFailures);
+
+                return {
+                    pendingDownloads,
+                    launchFailures
+                };
+            });
+            
+            console.error(errorObject);
+        });
+    }
+
     render() {
         let items = this.state.foundItems.map((item, index) => {
             let itemBody;
@@ -311,11 +385,11 @@ class HuggingfaceHubRepositoryViewer extends React.Component {
                                 ggufFiles={this.state.ggufFiles}
                                 installedModels={this.props.installedModels}
                                 downloads={this.props.downloads}
+                                pendingDownloads={this.state.pendingDownloads}
+                                launchFailures={this.state.launchFailures}
                                 onFileItemClick={this.handleFileItemClick}
                                 selectedFileIndex={this.state.selectedFileIndex}
-                                onStartDownload={(repo, filePath, fileSize) => this.props.onStartDownload(
-                                    repo, filePath, fileSize
-                                )}
+                                onStartDownload={this.handleStartDownload}
                                 repo={item} />;
             }
             return (
@@ -388,6 +462,10 @@ function RepositoryDetail(props) {
 
     let isInstalled = containsModel(props.installedModels, repo.id, filePath);
     let isInProgress = containsModel(props.downloads, repo.id, filePath);
+    let isPending = containsModel(props.pendingDownloads, repo.id, filePath);
+
+    let failures = props.launchFailures.filter(item => item.repo_id === repo.id && item.file_name === filePath);
+    let launchError = (failures.length > 0 && failures[0].error) || null;
 
     return (
         <div>
@@ -398,7 +476,8 @@ function RepositoryDetail(props) {
             </DropdownButton>
 
             <ModelDownload filePath={filePath} fileSize={fileSize} installed={isInstalled}
-                inProgress={isInProgress} onStartDownload={e => handleStartDownload(e)} />
+                inProgress={isInProgress} pending={isPending} launchError={launchError}
+                onStartDownload={e => handleStartDownload(e)} />
         </div>
     );
 }
@@ -408,7 +487,9 @@ function RepositoryMetadata(props) {
     let licenses = props.repo.licenses.join(", ");
     let datasets = props.repo.datasets.join(", ");
     let papers = props.repo.papers.map((paperId, index) => 
-        <ArxivLink key={index} paperId={paperId} />
+        <div key={index}>
+            <ArxivLink paperId={paperId} />
+        </div>
     );
     let tags = props.repo.tags.map((tag, tagIndex) => 
         <Badge key={tagIndex} bg="success">{tag}</Badge>
@@ -473,6 +554,11 @@ function ModelDownload(props) {
                     <Spinner animation="border" role="status" size="sm"></Spinner>
                 </Alert>
             )}
+
+            {props.filePath !== null && props.launchError && (
+                <Alert variant="danger" className="mb-3">{props.launchError}</Alert>
+            )}
+
             {props.filePath !== null && !props.installed && !props.inProgress && (
                 <div>
                     <div className="mb-3">
@@ -488,8 +574,8 @@ function ModelDownload(props) {
                     <Alert variant="warning" className="mb-3">
                         Make sure you have enough disk space on LLM server to download a chosen model.
                     </Alert>
-                    <Button variant="secondary" onClick={props.onStartDownload}>
-                        Start download    
+                    <Button variant="secondary" onClick={props.onStartDownload} disabled={props.pending}>
+                        Start download
                     </Button>
                 </div>
             )}

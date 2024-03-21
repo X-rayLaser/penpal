@@ -5,6 +5,7 @@ from rest_framework import status
 from huggingface_hub import HfApi, list_repo_tree
 
 import llm_utils
+from llm_utils.generators import DownloadStartFailed
 
 hf_api = HfApi()
 
@@ -74,8 +75,13 @@ def start_download(request):
     repo = request.data['repo']
     file_name = request.data['file_name']
     size = request.data['size']
-    download_id = llm_utils.start_download(repo, file_name, size)
-    return Response({'download_id': download_id})
+    try:
+        download_id = llm_utils.start_download(repo, file_name, size)
+        return Response({'download_id': download_id})
+    except DownloadStartFailed as e:
+        return Response(str(e), status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        return Response(str(e), status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
 
 @api_view(['GET'])
@@ -91,6 +97,11 @@ def get_download_status(request):
 @api_view(['GET'])
 def get_downloads_in_progress(request):
     return Response(llm_utils.get_downloads_in_progress())
+
+
+@api_view(['GET'])
+def get_failed_downloads(request):
+    return Response(llm_utils.get_failed_downloads())
 
 
 @api_view(['GET'])

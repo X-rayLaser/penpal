@@ -9,5 +9,6 @@ urlpatterns = [
     path('start-download/', views.start_download),
     path('get-download-status/', views.get_download_status),
     path('downloads-in-progress/', views.get_downloads_in_progress),
+    path('failed-downloads/', views.get_failed_downloads),
     path('installed-models/', views.get_installed_models)
 ]
