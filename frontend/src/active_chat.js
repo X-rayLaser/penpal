@@ -733,7 +733,7 @@ class ActiveChat extends React.Component {
             return (
                 <div>
                     {settingsWidget}
-                    {this.state.system_message && systemMessageWidget}
+                    {systemMessageWidget}
                     {this.state.tools.length > 0 && <div className="mt-3 mb-3">Tools used by LLM: {toolItems}</div>}
                     {radio}
                     <ConversationTree tree={this.state.chatTree} treePath={this.state.treePath}
@@ -769,7 +769,7 @@ class ActiveChat extends React.Component {
         return (
             <div>
                 {settingsWidget}
-                {this.state.system_message && systemMessageWidget}
+                {systemMessageWidget}
                 {this.state.tools.length > 0 && <div className="mt-3 mb-3">Tools used by LLM: {toolItems}</div>}
                 {radio}
                 <ConversationTree tree={this.state.chatTree} treePath={this.state.treePath}
