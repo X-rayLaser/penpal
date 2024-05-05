@@ -247,21 +247,27 @@ export function getThreadMessages(tree, thread) {
     return res;
 }
 
-export function getConversationText(tree, thread, questionTemplate, answerTemplate, systemMessage) {
-    let messages = getThreadMessages(tree, thread);
-    let result = "";
 
-    messages = includeSystemMessage(messages, systemMessage);
+export function getConversationText(messages, questionTemplate, answerTemplate, systemMessage, systemTemplate) {
+    let result = "";
 
     messages.forEach((msg, index) => {
         let template = isHumanText(index) ? questionTemplate : answerTemplate;
         result += template.render(msg.data.text);
     });
 
+    if (systemMessage) {
+        let prefix = systemMessage + "\n\n";
+        if (systemTemplate) {
+            prefix = systemTemplate.render(systemMessage);
+        }
+        result = prefix + result;
+    }
+
     return result;
 }
 
-function includeSystemMessage(messages, systemMessage, separator) {
+export function includeSystemMessage(messages, systemMessage, separator) {
     //prepends text of the first message in messages array with systemMessage
     let res = copyObject(messages);
 

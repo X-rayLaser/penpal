@@ -1,5 +1,7 @@
 import React from 'react';
 
+import { getConversationText, includeSystemMessage } from './tree';
+
 import {
     useLocation,
     useNavigate,
@@ -191,4 +193,90 @@ export function renderSize(size) {
     }
 
     return `${Math.round(newSize * 10) / 10} ${units}`;
+}
+
+
+export class TextTemplate {
+    constructor(template) {
+        this.template = template;
+    }
+
+    render(text) {
+        return this.template.replace("%message", text);
+    }
+};
+
+
+let chatTemplates = {
+    llama3: {
+        question: "<|start_header_id|>user<|end_header_id|>\n\n%message<|eot_id|>",
+        answer: "<|start_header_id|>assistant<|end_header_id|>\n\n%message<|eot_id|>",
+        systemMessage: "<|start_header_id|>system<|end_header_id|>\n\n%message<|eot_id|>",
+        startOfText: "<|begin_of_text|>"
+    },
+    mistral_8b: {
+        question: "[INST]%message[/INST]",
+        answer: "%message",
+        systemMessage: null,
+        startOfText: "<s>"
+    },
+    openLlama_3b: {
+        question: "<human>%message</human>",
+        answer: "<bot>%message</bot>",
+        systemMessage: null,
+        startOfText: ""
+    }
+};
+
+let rawTemplateSpec = {
+    question: "%message\n",
+    answer: "%message\n",
+    systemMessage: null,
+    startOfText: ""
+};
+
+
+export class ChatEncoder {
+    constructor(templateSpec) {
+        this.spec = templateSpec;
+    }
+
+    encode(systemMessage, messages) {
+        let questionTemplate = new TextTemplate(this.spec.question);
+        let answerTemplate = new TextTemplate(this.spec.answer);
+
+        let conversation;
+        if (this.spec.systemMessage) {
+            let systemTemplate = new TextTemplate(this.spec.systemMessage);
+            conversation = getConversationText(messages, questionTemplate, answerTemplate, systemMessage, systemTemplate);
+        } else {
+            messages = includeSystemMessage(messages, systemMessage);
+            conversation = getConversationText(messages, questionTemplate, answerTemplate);
+        }
+
+        conversation = this.spec.startOfText + conversation;
+        return conversation;
+    }
+}
+
+
+export function guessChatEncoder(configuration, instructMode) {
+    let fileName = null;
+    if (configuration && configuration.file_name) {
+        fileName = configuration.file_name.toLowerCase();
+    }
+
+    let templateSpec = rawTemplateSpec;
+
+    if (fileName && instructMode) {
+        if (fileName.toLowerCase().match(/llama?-?_3/)) {
+            templateSpec = chatTemplates.llama3;
+        } else if (fileName.toLowerCase().match(/mistral/)) {
+            templateSpec = chatTemplates.mistral_8b;
+        } else if (fileName.toLowerCase().match(/open?-?_llama/)) {
+            templateSpec = chatTemplates.openLlama_3b;
+        }
+    }
+
+    return new ChatEncoder(templateSpec);
 }

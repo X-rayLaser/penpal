@@ -7,24 +7,18 @@ import Pagination from 'react-bootstrap/Pagination';
 import Alert from 'react-bootstrap/Alert';
 import ButtonGroup from 'react-bootstrap/ButtonGroup';
 import Badge from 'react-bootstrap/Badge';
-import { withRouter, generateResponse } from "./utils";
+import { withRouter, generateResponse, guessChatEncoder, ChatEncoder } from "./utils";
 import { 
     fetchTree, addNode, addMessage, selectThread, appendThread, collapseThread,
-    getNodeById, getThreadMessages, getConversationText, isHumanText
+    getNodeById, getThreadMessages, getConversationText, isHumanText, includeSystemMessage
 } from './tree';
 import { CollapsibleLLMSettings } from './presets';
 import { CollapsibleEditableSystemMessage } from './components';
 import { GenericFetchJson } from './generic_components';
 
-class TextTemplate {
-    constructor(template) {
-        this.template = template;
-    }
 
-    render(text) {
-        return this.template.replace("%message", text);
-    }
-};
+const LLAMA3_MODEL = "llama_3";
+const MISTRAL_8B_MODEL = "mistral_8b";
 
 
 function ConversationTree(props) {
@@ -247,6 +241,7 @@ class ActiveChat extends React.Component {
             contextLoaded: false,
             loadingConversation: true,
             mode: RAW_MODE,
+            model_name: LLAMA3_MODEL,
             
             //llm settings
             temperature: 0.8,
@@ -544,25 +539,6 @@ class ActiveChat extends React.Component {
     }
 
     preparePromptWithRecreatedConversation() {
-        let questionTemplateText;
-        let answerTemplateText;
-
-        if (this.state.mode === RAW_MODE) {
-            questionTemplateText = "%message ";
-            answerTemplateText = questionTemplateText;
-        } else if (this.state.mode === CHAT_MODE) {
-            questionTemplateText = "<human>%message</human>";
-            answerTemplateText = "<bot>%message</bot>"
-        } else if (this.state.mode === INSTRUCTION_MODE) {
-            questionTemplateText = "[INST]%message[/INST]";
-            answerTemplateText = "%message";
-        } else {
-            console.error(`Unknown mode ${this.state.mode}`);
-            throw `Unknown mode ${this.state.mode}`;
-        }
-        let questionTemplate = new TextTemplate(questionTemplateText);
-        let answerTemplate = new TextTemplate(answerTemplateText);
-
         let sysMessageText = (this.state.system_message && this.state.system_message.text) || "";
 
         let toolText = this.state.toolText;
@@ -570,20 +546,17 @@ class ActiveChat extends React.Component {
             sysMessageText += toolText;
         }
 
-        let conversation = getConversationText(
-            this.state.chatTree, this.state.treePath,
-            questionTemplate, answerTemplate, sysMessageText
-        );
-
-        if (this.state.mode === INSTRUCTION_MODE) {
-            conversation = "<s>" + conversation;
+        let messages = getThreadMessages(this.state.chatTree, this.state.treePath);
+        let chatEncoder;
+        if (this.state.configuration && this.state.configuration.template_spec) {
+            let templateSpec = JSON.parse(this.state.configuration.template_spec);
+            chatEncoder = new ChatEncoder(templateSpec);
+        } else {
+            let instructMode = this.state.mode === RAW_MODE ? false : true;
+            chatEncoder = guessChatEncoder(this.state.configuration, instructMode);
         }
 
-        if (this.state.mode === CHAT_MODE) {
-            conversation += "<bot>";
-        }
-
-        return conversation;
+        return chatEncoder.encode(sysMessageText, messages);
     }
 
     handleBranchSwitch(message, newBranchId) {

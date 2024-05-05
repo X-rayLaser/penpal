@@ -142,15 +142,30 @@ class ModelSelectionWidget extends BaseSelectionWidget {
     }
 
     renderDetail(item) {
+        let licensesText = "";
+        if (item.repo.licenses) {
+            licensesText = item.repo.licenses.join(", ");
+        }
+
+        let papersText = "";
+        if (item.repo.papers) {
+            papersText = item.repo.papers.join(", ");
+        }
+
+        let datasetsText = "";
+        if (item.repo.datasets) {
+            datasetsText = item.repo.datasets.join(", ");
+        }
+
         return (
             <Card bg="light" text="dark" className="mt-3 mb-3">
                 <Card.Body>
                     <Card.Title>{this.selectionLabel}</Card.Title>
                     <Card.Text>File: {item.file_name}</Card.Text>
                     <Card.Text>Size: {renderSize(item.size)}</Card.Text>
-                    <Card.Text>Licenses: {item.repo.licenses.join(", ")}</Card.Text>
-                    <Card.Text>Papers: {item.repo.papers.join(", ")}</Card.Text>
-                    <Card.Text>Datasets: {item.repo.datasets.join(", ")}</Card.Text>
+                    {licensesText && <Card.Text>Licenses: {licensesText}</Card.Text>}
+                    {papersText && <Card.Text>Papers: {papersText}</Card.Text>}
+                    {datasetsText && <Card.Text>Datasets: {datasetsText}</Card.Text>}
                 </Card.Body>
             </Card>
         );
@@ -395,7 +410,8 @@ class NewConfigurationForm extends React.Component {
             loadingSystemMessages: true,
             loadingPresets: true,
             tools: [],
-            supportedTools: []
+            supportedTools: [],
+            chatTemplate: ""
         };
 
         this.handleNameChange = this.handleNameChange.bind(this);
@@ -406,6 +422,7 @@ class NewConfigurationForm extends React.Component {
         this.handleModelFileChange = this.handleModelFileChange.bind(this);
         this.handleLaunchConfChanged = this.handleLaunchConfChanged.bind(this);
         this.handleCheck = this.handleCheck.bind(this);
+        this.handleTemplateInput = this.handleTemplateInput.bind(this);
     }
 
     componentDidMount() {
@@ -543,7 +560,8 @@ class NewConfigurationForm extends React.Component {
             file_name: this.state.selectedModelFile,
             launch_params: this.state.launchConfig,
             preset: preset.id,
-            tools: this.state.tools
+            tools: this.state.tools,
+            template_spec: this.state.chatTemplate
         };
 
         if (this.state.selectedMessageName) {
@@ -553,6 +571,10 @@ class NewConfigurationForm extends React.Component {
 
         console.log(data);
         this.props.onSubmit(data);
+    }
+
+    handleTemplateInput(e) {
+        this.setState({ chatTemplate: e.target.value });
     }
 
     render() {
@@ -641,6 +663,13 @@ class NewConfigurationForm extends React.Component {
                                            selectedName={this.state.selectedPresetName}
                                            onChange={this.handlePresetChange} />
                 </div>
+
+                <Form.Group className="mb-3">
+                    <Form.Label>Chat template spec (JSON)</Form.Label>
+                    <Form.Control as="textarea" rows={10} placeholder="Enter a template in json format"
+                          onInput={this.handleTemplateInput}
+                          value={this.state.chatTemplate} />
+                </Form.Group>
 
                 {checkboxes &&
                 <Form.Group className="mb-3">

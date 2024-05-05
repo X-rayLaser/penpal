@@ -4,12 +4,13 @@ import requests
 import time
 import json
 import os
+import shutil
+import sys
+
+sys.path.insert(0, ".")
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from huggingface_hub import hf_hub_download
-
-
-models_root = "installed_models"
-models_registry = os.path.join(models_root, "models_registry.json")
+from llm_services.common import models_root, models_registry
 
 
 class LLMManager:

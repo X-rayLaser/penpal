@@ -65,6 +65,8 @@ class Configuration(models.Model):
 
     tools = models.JSONField()
 
+    template_spec = models.JSONField(blank=True, null=True)
+
     def __str__(self):
         return self.name
 
