@@ -269,14 +269,15 @@ export function guessChatEncoder(configuration, instructMode) {
     let templateSpec = rawTemplateSpec;
 
     if (fileName && instructMode) {
-        if (fileName.toLowerCase().match(/llama?-?_3/)) {
+        if (fileName.toLowerCase().match(/llama-?_?3/)) {
             templateSpec = chatTemplates.llama3;
         } else if (fileName.toLowerCase().match(/mistral/)) {
             templateSpec = chatTemplates.mistral_8b;
-        } else if (fileName.toLowerCase().match(/open?-?_llama/)) {
+        } else if (fileName.toLowerCase().match(/open-?_?llama/)) {
             templateSpec = chatTemplates.openLlama_3b;
         }
     }
 
+    console.log("using spec:", templateSpec);
     return new ChatEncoder(templateSpec);
 }
