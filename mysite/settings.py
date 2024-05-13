@@ -148,4 +148,10 @@ LLM_SETTINGS = {
     }
 }
 
+
+TTS_BACKEND = {
+    "class": "tts.backends.NullTtsBackend"
+}
+
+
 from mysite.local_settings import *
