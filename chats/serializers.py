@@ -64,8 +64,8 @@ class MessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = Message
         fields = ['id', 'text', 'clean_text', 'html', 'date_time',
-                  'generation_details', 'parent', 'replies', 'chat']
-        read_only_fields = ['replies']
+                  'generation_details', 'parent', 'replies', 'chat', 'audio']
+        read_only_fields = ['replies', 'audio']
 
     def get_clean_text(self, obj):
         open_tag = backend.open_apicall_tag

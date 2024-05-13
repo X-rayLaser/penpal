@@ -3,3 +3,4 @@ requests
 djangorestframework
 markdown
 huggingface_hub
+music21

@@ -2,10 +2,13 @@ import json
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from rest_framework import viewsets
-from rest_framework import generics
+from rest_framework import viewsets, generics
+
 from django.http.response import StreamingHttpResponse, HttpResponseNotAllowed, HttpResponseBadRequest
 from django.views.decorators.csrf import csrf_exempt
+from django.shortcuts import get_object_or_404
+from django.core.files.base import ContentFile
+
 from .models import SystemMessage, Preset, Configuration, Chat, Message
 from .serializers import (
     ChatSerializer,
@@ -23,7 +26,7 @@ from tools.api_calls import (
     ApiFunctionCall,
     ApiCallNotFoundError
 )
-
+from tts import tts_backend
 from .pagination import DefaultPagination
 
 
@@ -74,6 +77,20 @@ def clear_llm_context(request):
 @csrf_exempt
 def generate_reply(request):
     return generate_completion(request)
+
+
+@api_view(["POST"])
+def generate_speech(request, message_pk):
+    message = get_object_or_404(Message, pk=message_pk)
+    audio_data = tts_backend(message.text)
+
+    if audio_data:
+        audio_file = ContentFile(audio_data, name="tts-audio-file.wav")
+        message.audio = audio_file
+        message.save()
+    
+    ser = MessageSerializer(message, context={'request': request})
+    return Response(ser.data, status=status.HTTP_200_OK)
 
 
 class ChatList(generics.ListCreateAPIView):

@@ -13,3 +13,5 @@ llama.cpp
 tools/specs/custom
 tools/custom.py
 installed_models
+test_data/
+media/

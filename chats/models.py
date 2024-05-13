@@ -93,6 +93,8 @@ class Message(models.Model):
 
     date_time = models.DateTimeField(auto_now_add=True, blank=True)
 
+    audio = models.FileField(upload_to="uploads/audio", blank=True, null=True)
+
     @property
     def human_produced(self):
         return self.generation_details is None

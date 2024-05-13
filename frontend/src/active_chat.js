@@ -132,7 +132,7 @@ class Message extends React.Component {
 
         let bg = props.bg;
         let buttonVariant = bg === 'secondary' || bg === 'dark' ? 'outline-light' : 'outline-secondary';
-
+        console.log('message ================', message, message.data.audio);
         return (        
             <Card bg={props.bg} text={props.color} className="mb-3" style={{color:'red'}}>
                 <Card.Header>{props.header}</Card.Header>
@@ -155,6 +155,13 @@ class Message extends React.Component {
                         </Button>
                     </ButtonGroup>
                     {element}
+
+                    {message.data.audio && (
+                        <audio controls className="mt-3">
+                            <source src={message.data.audio} type="audio/wav" />
+                            Your browser does not support the audio element.
+                        </audio>
+                    )}
                 </Card.Body>
                 <Card.Footer>
                     <div>
@@ -476,6 +483,11 @@ class ActiveChat extends React.Component {
             let promise = this.postText(generatedText, leaf.id);
 
             promise.then(message => {
+                const url = `/chats/generate_speech/${message.id}/`;
+                const fetcher = new GenericFetchJson();
+                fetcher.method = "POST";
+                return fetcher.performFetch(url);
+            }).then(message => {
                 this.setState(prevState => {
                     let res = addMessage(
                         prevState.chatTree, prevState.treePath, leaf.id, message

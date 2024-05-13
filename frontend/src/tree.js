@@ -49,7 +49,7 @@ export function buildTree(root) {
 
 function fixBranch(node) {
     let fixedNode = new Node(node.id, { 
-        text: node.text, clean_text: node.clean_text, html: node.html
+        text: node.text, clean_text: node.clean_text, html: node.html, audio: node.audio
     });
     for (let i = 0; i < node.replies.length; i++) {
         let fixedChild = fixBranch(node.replies[i]);
@@ -66,6 +66,8 @@ export function fetchTree(url) {
             "Content-Type": "application/json"
         }
     }).then(response => response.json()).then(obj => {
+
+        console.log("fetch tree:", obj)
         return buildTree(obj);
     });
 }
@@ -75,10 +77,12 @@ export function addNode(tree, nodeId, message) {
     let treeCopy = copyTree(tree);
 
     let parentNode = getNodeById(treeCopy, nodeId);
+    //todo: consider to just pass message itself as data
     let data = {
         text: message.text,
         clean_text: message.clean_text,
-        html: message.html
+        html: message.html,
+        audio: message.audio
     };
 
     let childNode = new Node(message.id, data);
@@ -95,7 +99,8 @@ function addNodeUnderRoot(tree, message) {
     let data = {
         text: message.text,
         clean_text: message.clean_text,
-        html: message.html
+        html: message.html,
+        audio: message.audio
     };
     let childNode = new Node(message.id, data);
     treeCopy.addChild(childNode);
