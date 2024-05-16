@@ -154,4 +154,9 @@ TTS_BACKEND = {
 }
 
 
+STT_BACKEND = {
+    "class": "stt.backends.DummySpeechToTextBackend"
+}
+
+
 from mysite.local_settings import *

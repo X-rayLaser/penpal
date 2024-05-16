@@ -12,6 +12,7 @@ router.register("configurations", views.ConfigurationViewSet)
 urlpatterns = [
     path('generate_reply/', views.generate_reply),
     path('generate_speech/<int:message_pk>/', views.generate_speech),
+    path('transcribe_speech/', views.transcribe_speech),
     path('completion/', views.generate_completion),
     path('find_api_call/', views.find_api_call_view),
     path('call_api/', views.call_api_view, name='call_api'),

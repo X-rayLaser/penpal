@@ -218,7 +218,6 @@ class GenericFetchJson {
     }
 
     performFetch(url) {
-
         let requestParams = {
             method: this.method,
             headers: {
@@ -228,7 +227,13 @@ class GenericFetchJson {
         };
 
         if (this.method === 'POST') {
-            requestParams.body = JSON.stringify(this.body);
+            let binary = this.body.constructor.name === 'Blob' ? true : false;
+            if (binary) {
+                requestParams.headers["Content-Type"] = "application/octet-stream";
+                requestParams.body = this.body;
+            } else {
+                requestParams.body = JSON.stringify(this.body);
+            }
         }
 
         let promise = fetch(url, requestParams).then(response => {

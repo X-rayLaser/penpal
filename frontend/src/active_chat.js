@@ -132,7 +132,6 @@ class Message extends React.Component {
 
         let bg = props.bg;
         let buttonVariant = bg === 'secondary' || bg === 'dark' ? 'outline-light' : 'outline-secondary';
-        console.log('message ================', message, message.data.audio);
         return (        
             <Card bg={props.bg} text={props.color} className="mb-3" style={{color:'red'}}>
                 <Card.Header>{props.header}</Card.Header>
@@ -358,16 +357,13 @@ class ActiveChat extends React.Component {
 
     }
 
-    handleInput(event) {
-        this.setState({ prompt: event.target.value, completion: "" });
+    handleInput(text) {
+        this.setState({ prompt: text, completion: "" });
+        console.log("Got input text from voice controlled textarea ", text);
     }
 
     handleSubmitPrompt(e) {
-
         e.preventDefault();
-
-        console.log(this.state.chatTree);
-        console.log(this.state.treePath);
 
         let leaf = traverseTree(this.state.chatTree, this.state.treePath);
 
@@ -379,6 +375,7 @@ class ActiveChat extends React.Component {
         }
 
         let leafId = leaf.id || null;
+        this.setState({ inProgress: true });
         let promise = this.postText(this.state.prompt, leafId, chatId);
 
         promise.then(message => {
@@ -426,7 +423,7 @@ class ActiveChat extends React.Component {
         let fetcher = new GenericFetchJson();
         fetcher.method = 'POST';
         fetcher.body = data;
-
+ 
         return fetcher.performFetch('/chats/messages/');
     }
 
@@ -649,18 +646,11 @@ class ActiveChat extends React.Component {
     }
 
     render() {
-        let textarea = (
-            <Form.Control as="textarea" rows={10} placeholder="Enter a prompt here"
-                          onInput={this.handleInput}
-                          value={this.state.prompt}
-                          disabled={this.state.inProgress} />
-        );
         let radio = <ModeSelectionForm 
                         onRawMode={this.handleRawModeSwitch}
                         onChatMode={this.handleChatModeSwitch}
                         onInstructionMode={this.handleInstructionModeSwitch} />
-        let button;
-
+ 
         let eventHandlers = {
             onTemperatureChange: this.handleTemperatureChange,
             onTopKChange: this.handleTopKChange,
@@ -687,10 +677,6 @@ class ActiveChat extends React.Component {
             <CollapsibleEditableSystemMessage systemMessage={this.state.system_message} 
                 inProgress={this.state.inProgress}
                 onChange={this.handleSystemMessageChanged} />
-        );
-
-        let submissionErrorsAlerts = this.state.submissionErrors.map((error, index) =>
-            <Alert key={index} variant="danger" className="mb-3">{error}</Alert>
         );
 
         let spinner = (
@@ -733,7 +719,103 @@ class ActiveChat extends React.Component {
             );
         }
 
-        if (this.state.inProgress) {            
+        return (
+            <div>
+                {settingsWidget}
+                {systemMessageWidget}
+                {this.state.tools.length > 0 && <div className="mt-3 mb-3">Tools used by LLM: {toolItems}</div>}
+                {radio}
+                <ConversationTree tree={this.state.chatTree} treePath={this.state.treePath}
+                        onBranchSwitch={this.handleBranchSwitch}
+                        onRegenerate={this.handleRegenerate} />
+                {this.state.inProgress && <ReplyInProgress text={this.state.completion} />}
+                <VoiceDictationTextareaForm submissionErrors={this.state.submissionErrors}
+                    onSubmit={this.handleSubmitPrompt}
+                    onTextChange={this.handleInput}
+                    text={this.state.prompt}
+                    inProgress={this.state.inProgress} />
+            </div>
+        );
+    }
+};
+
+
+class VoiceDictationTextareaForm extends React.Component {
+    constructor(props) {
+        super(props);
+        this.state = {
+            recording: false,
+            processing: false
+        };
+
+        this.startRecording = this.startRecording.bind(this);
+        this.stopRecording = this.stopRecording.bind(this);
+
+        this.handleInput = this.handleInput.bind(this);
+
+        this.mediaRecorder = null;
+        this.voice = [];
+    }
+
+    componentDidMount() {
+        let self = this;
+        navigator.mediaDevices.getUserMedia({ audio: true}).then(stream => {
+
+            const options = {
+                audioBitsPerSecond: 44100 * 2 * 8
+            };
+            const mediaRecorder = new MediaRecorder(stream);
+
+            mediaRecorder.addEventListener("dataavailable",function(event) {
+                self.voice.push(event.data);
+            });
+    
+            mediaRecorder.addEventListener("stop", function() {
+                const voiceBlob = new Blob(self.voice, {
+                    type: 'application/octet-stream'
+                });
+
+                self.setState({ processing: true });
+
+                let fetcher = new GenericFetchJson();
+                fetcher.body = voiceBlob;
+                fetcher.method = 'POST';
+
+                fetcher.performFetch('/chats/transcribe_speech/').then(data => {
+                    self.props.onTextChange(self.props.text + data.text);
+                }).finally(() => {
+                    self.setState({ processing: false });
+                });
+            });
+
+            self.mediaRecorder = mediaRecorder;
+        });
+    }
+    
+    handleInput(e) {
+        this.props.onTextChange(e.target.value);
+    }
+
+    startRecording() {
+        if (this.mediaRecorder) {
+            this.voice = [];
+            this.setState({ recording: true });
+            this.mediaRecorder.start();
+        }
+    }
+
+    stopRecording() {
+        this.mediaRecorder.stop();
+        this.setState({ recording: false });
+    }
+    render() {
+        let busy = this.state.recording || this.state.processing;
+        let submissionErrorsAlerts = this.props.submissionErrors.map((error, index) =>
+            <Alert key={index} variant="danger" className="mb-3">{error}</Alert>
+        );
+
+        let button;
+        if (this.props.inProgress) {            
             button = <Button variant="primary" type="submit" disabled>
                 <Spinner
                     as="span"
@@ -746,38 +828,41 @@ class ActiveChat extends React.Component {
             </Button>;
         } else {            
             button = (
-                <Button variant="primary" type="submit" disabled={this.state.prompt.length === 0}>
+                <Button variant="primary" type="submit" disabled={this.props.text.length === 0}>
                     Generate completion
                 </Button>
             );
         }
-        return (
-            <div>
-                {settingsWidget}
-                {systemMessageWidget}
-                {this.state.tools.length > 0 && <div className="mt-3 mb-3">Tools used by LLM: {toolItems}</div>}
-                {radio}
-                <ConversationTree tree={this.state.chatTree} treePath={this.state.treePath}
-                        onBranchSwitch={this.handleBranchSwitch}
-                        onRegenerate={this.handleRegenerate} />
-                {this.state.inProgress && <ReplyInProgress text={this.state.completion} />}
-                {!this.state.inProgress && 
-                <Form onSubmit={this.handleSubmitPrompt}>
-                    <Form.Group className="mb-3" controlId="exampleForm.ControlTextarea1">
-                        <Form.Label>Use LLM to complete your prompt</Form.Label>
-                        {textarea}
 
-                        {submissionErrorsAlerts.length > 0 && 
-                            <div className="mt-3">{submissionErrorsAlerts}</div>
-                        }
-                    </Form.Group>
-                    {button}
-                </Form>
-                }
-            </div>
+        return (
+            <Form onSubmit={this.props.onSubmit}>
+                <Form.Group className="mb-3" controlId="exampleForm.ControlTextarea1">
+                    <Form.Label>Use LLM to complete your prompt</Form.Label>
+                    <Form.Control as="textarea" rows={10} placeholder="Enter a prompt here"
+                            onInput={this.handleInput}
+                            value={this.props.text}
+                            disabled={busy || this.props.inProgress} />
+                    {!busy && !this.props.inProgress && (
+                        <Button onClick={this.startRecording} className="mt-3">
+                            Start voice dictation
+                        </Button>
+                    )}
+                    {this.state.recording && <div className="mt-3 mb-3">Speak, please</div>}
+                    {this.state.processing && <div className="mt-3 mb-3">Speech recognition in progress...</div>}
+                    {this.state.recording && !this.state.processing && (
+                        <Button onClick={this.stopRecording} className="mt-3">
+                            Stop voice dictation
+                        </Button>
+                    )}
+                    {submissionErrorsAlerts.length > 0 && 
+                        <div className="mt-3">{submissionErrorsAlerts}</div>
+                    }
+                </Form.Group>
+                {button}
+            </Form>
         );
     }
-};
+}
 
 ActiveChat = withRouter(ActiveChat);
 

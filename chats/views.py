@@ -3,6 +3,8 @@ from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import viewsets, generics
+from rest_framework.parsers import BaseParser
+from rest_framework.decorators import parser_classes
 
 from django.http.response import StreamingHttpResponse, HttpResponseNotAllowed, HttpResponseBadRequest
 from django.views.decorators.csrf import csrf_exempt
@@ -27,6 +29,7 @@ from tools.api_calls import (
     ApiCallNotFoundError
 )
 from tts import tts_backend
+from stt import stt_backend
 from .pagination import DefaultPagination
 
 
@@ -91,6 +94,23 @@ def generate_speech(request, message_pk):
     
     ser = MessageSerializer(message, context={'request': request})
     return Response(ser.data, status=status.HTTP_200_OK)
+
+
+
+class BinaryParser(BaseParser):
+    """Binary data parser"""
+    media_type = 'application/octet-stream'
+
+    def parse(self, stream, media_type=None, parser_context=None):
+        return stream.read()
+
+
+@api_view(["POST"])
+@parser_classes([BinaryParser])
+def transcribe_speech(request):
+    raw_audio = request.data
+    text = stt_backend(raw_audio)
+    return Response({"text": text})
 
 
 class ChatList(generics.ListCreateAPIView):
