@@ -744,6 +744,7 @@ class VoiceDictationTextareaForm extends React.Component {
     constructor(props) {
         super(props);
         this.state = {
+            starting: false,
             recording: false,
             processing: false,
             micError: "",
@@ -768,14 +769,18 @@ class VoiceDictationTextareaForm extends React.Component {
     }
 
     startRecording() {
-        this.setState({ micError: "", recordingError: "" });
+        this.setState({ micError: "", recordingError: "", starting: true });
         this.voice = [];
         let self = this;
 
         if (this.mediaRecorder) {
-            this.setState({ recording: true });
-            this.mediaRecorder.start();
-            return;
+            try {
+                this.mediaRecorder.start();
+                this.setState({ recording: true, starting: false });
+                return;
+            } catch (e) {
+                this.mediaRecorder = null;
+            }
         }
 
         navigator.mediaDevices.getUserMedia({ audio: true}).then(stream => {
@@ -786,35 +791,42 @@ class VoiceDictationTextareaForm extends React.Component {
             });
     
             mediaRecorder.addEventListener("stop", function() {
-                const voiceBlob = new Blob(self.voice, {
-                    type: 'application/octet-stream'
-                });
-
-                self.setState({ processing: true });
-
-                let fetcher = new GenericFetchJson();
-                fetcher.body = voiceBlob;
-                fetcher.method = 'POST';
-
-                fetcher.performFetch('/chats/transcribe_speech/').then(data => {
-                    self.props.onTextChange(self.props.text + data.text);
-                }).catch(reason => {
-                    console.error(reason.error);
-                    self.setState({
-                        recordingError: "Spech-to-text backend/server is malfunctioning or unavailable"
-                    });
-                }).finally(() => {
-                    self.setState({ processing: false });
-                });
+                self.sendRecording(self.voice);
             });
 
             self.mediaRecorder = mediaRecorder;
-            self.setState({ useMic: true });
-            this.setState({ recording: true });
             this.mediaRecorder.start();
+            this.setState({ recording: true });
         }).catch(reason => {
             console.error("Cannot use microphone: ", reason);
-            this.setState({ micError: reason.message});
+            this.setState({ micError: reason.message, processing: false, recording: false });
+            this.mediaRecorder = null;
+        }).finally(() => {
+            this.setState({ starting: false });
+        });
+    }
+
+    sendRecording(voiceRecording) {
+        const url = '/chats/transcribe_speech/';
+        const voiceBlob = new Blob(voiceRecording, {
+            type: 'application/octet-stream'
+        });
+
+        this.setState({ processing: true });
+
+        let fetcher = new GenericFetchJson();
+        fetcher.body = voiceBlob;
+        fetcher.method = 'POST';
+
+        fetcher.performFetch(url).then(data => {
+            this.props.onTextChange(this.props.text + data.text);
+        }).catch(reason => {
+            console.error(reason.error);
+            this.setState({
+                recordingError: "Spech-to-text backend/server is malfunctioning or unavailable"
+            });
+        }).finally(() => {
+            this.setState({ processing: false });
         });
     }
 
@@ -860,7 +872,7 @@ class VoiceDictationTextareaForm extends React.Component {
                             style={{ paddingTop: '34px' }} />
                     <div style={{ position: 'absolute', right: '0px', top: '-15px'}} className="mt-3">
                         {!busy && !this.props.inProgress && (
-                            <Button variant="secondary" onClick={this.startRecording}>
+                            <Button variant="secondary" onClick={this.startRecording} disabled={this.state.starting}>
                                 Start voice dictation
                             </Button>
                         )}
