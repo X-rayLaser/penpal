@@ -745,7 +745,9 @@ class VoiceDictationTextareaForm extends React.Component {
         super(props);
         this.state = {
             recording: false,
-            processing: false
+            processing: false,
+            micError: "",
+            recordingError: ""
         };
 
         this.startRecording = this.startRecording.bind(this);
@@ -758,12 +760,25 @@ class VoiceDictationTextareaForm extends React.Component {
     }
 
     componentDidMount() {
-        let self = this;
-        navigator.mediaDevices.getUserMedia({ audio: true}).then(stream => {
+        
+    }
+    
+    handleInput(e) {
+        this.props.onTextChange(e.target.value);
+    }
 
-            const options = {
-                audioBitsPerSecond: 44100 * 2 * 8
-            };
+    startRecording() {
+        this.setState({ micError: "", recordingError: "" });
+        this.voice = [];
+        let self = this;
+
+        if (this.mediaRecorder) {
+            this.setState({ recording: true });
+            this.mediaRecorder.start();
+            return;
+        }
+
+        navigator.mediaDevices.getUserMedia({ audio: true}).then(stream => {
             const mediaRecorder = new MediaRecorder(stream);
 
             mediaRecorder.addEventListener("dataavailable",function(event) {
@@ -783,25 +798,24 @@ class VoiceDictationTextareaForm extends React.Component {
 
                 fetcher.performFetch('/chats/transcribe_speech/').then(data => {
                     self.props.onTextChange(self.props.text + data.text);
+                }).catch(reason => {
+                    console.error(reason.error);
+                    self.setState({
+                        recordingError: "Spech-to-text backend/server is malfunctioning or unavailable"
+                    });
                 }).finally(() => {
                     self.setState({ processing: false });
                 });
             });
 
             self.mediaRecorder = mediaRecorder;
-        });
-    }
-    
-    handleInput(e) {
-        this.props.onTextChange(e.target.value);
-    }
-
-    startRecording() {
-        if (this.mediaRecorder) {
-            this.voice = [];
+            self.setState({ useMic: true });
             this.setState({ recording: true });
             this.mediaRecorder.start();
-        }
+        }).catch(reason => {
+            console.error("Cannot use microphone: ", reason);
+            this.setState({ micError: reason.message});
+        });
     }
 
     stopRecording() {
@@ -838,22 +852,35 @@ class VoiceDictationTextareaForm extends React.Component {
             <Form onSubmit={this.props.onSubmit}>
                 <Form.Group className="mb-3" controlId="exampleForm.ControlTextarea1">
                     <Form.Label>Use LLM to complete your prompt</Form.Label>
+                    <div style={{ position: 'relative', height: '100%' }}>
                     <Form.Control as="textarea" rows={10} placeholder="Enter a prompt here"
                             onInput={this.handleInput}
                             value={this.props.text}
-                            disabled={busy || this.props.inProgress} />
-                    {!busy && !this.props.inProgress && (
-                        <Button onClick={this.startRecording} className="mt-3">
-                            Start voice dictation
-                        </Button>
+                            disabled={busy || this.props.inProgress}
+                            style={{ paddingTop: '34px' }} />
+                    <div style={{ position: 'absolute', right: '0px', top: '-15px'}} className="mt-3">
+                        {!busy && !this.props.inProgress && (
+                            <Button variant="secondary" onClick={this.startRecording}>
+                                Start voice dictation
+                            </Button>
+                        )}
+                        {this.state.recording && !this.state.processing && (
+                            <Button variant="secondary" onClick={this.stopRecording}>
+                                Stop voice dictation
+                            </Button>
+                        )}
+                        </div>
+                    </div>
+                    {this.state.micError && (
+                        <Alert variant="danger" className="mt-3">
+                            Cannot use microphone (check permissions). The original error message: {this.state.micError}
+                        </Alert>
+                    )}
+                    {this.state.recordingError && (
+                        <Alert variant="danger" className="mt-3">{this.state.recordingError}</Alert>
                     )}
                     {this.state.recording && <div className="mt-3 mb-3">Speak, please</div>}
                     {this.state.processing && <div className="mt-3 mb-3">Speech recognition in progress...</div>}
-                    {this.state.recording && !this.state.processing && (
-                        <Button onClick={this.stopRecording} className="mt-3">
-                            Stop voice dictation
-                        </Button>
-                    )}
                     {submissionErrorsAlerts.length > 0 && 
                         <div className="mt-3">{submissionErrorsAlerts}</div>
                     }
