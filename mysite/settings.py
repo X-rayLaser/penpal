@@ -155,8 +155,13 @@ TTS_BACKEND = {
 
 
 STT_BACKEND = {
-    "class": "stt.backends.DummySpeechToTextBackend"
+    "class": "stt.backends.NullSpeechToTextBackend"
 }
+
+# celery settings
+CELERY_RESULT_BACKEND = "rpc://"
+CELERY_BROKER_URL = "redis://localhost"
+CELERY_TASK_TIME_LIMIT = 30 * 60
 
 
 from mysite.local_settings import *
