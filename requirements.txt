@@ -5,3 +5,4 @@ markdown
 huggingface_hub
 music21
 celery
+websockets

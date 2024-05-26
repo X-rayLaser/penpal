@@ -31,7 +31,7 @@ from tools.api_calls import (
 from tts import tts_backend
 from stt import stt_backend
 from .pagination import DefaultPagination
-
+from .tasks import generate_llm_response
 
 class SystemMessageViewSet(viewsets.ModelViewSet):
     serializer_class = SystemMessageSerializer
@@ -48,24 +48,26 @@ class ConfigurationViewSet(viewsets.ModelViewSet):
     queryset = Configuration.objects.all()
 
 
-@csrf_exempt
-def generate_completion(request):
-    if request.method == 'POST':
-        body = json.loads(request.body)
-        prompt = body.get("prompt")
-        inference_config = body.get("inference_config")
-        llm_settings = body.get("llm_settings", {})
-        clear_context = body.get("clear_context", False)
 
-        if prompt:
-            print("about to start streaming. Prompt:", prompt)
-            response = StreamingHttpResponse(
-                llm_utils.stream_tokens(prompt, inference_config, clear_context, llm_settings)
-            )
-            return response
-        return HttpResponseBadRequest("Expected 'prompt' field in json request body")
-    
-    return HttpResponseNotAllowed(["POST"])
+def _generate_completion(request):
+    body = request.data
+    prompt = body.get("prompt")
+    inference_config = body.get("inference_config")
+    llm_settings = body.get("llm_settings", {})
+    clear_context = body.get("clear_context", False)
+
+    if prompt:
+        print("about to start streaming. Prompt:", prompt)
+        task = generate_llm_response.delay(prompt, inference_config, clear_context, llm_settings)
+        return Response({'task_id': task.task_id})
+
+    return Response({'errors': ["Expected 'prompt' field in json request body"]}, 
+                    status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["POST"])
+def generate_completion(request):
+    return _generate_completion(request)
 
 
 @csrf_exempt
@@ -77,9 +79,9 @@ def clear_llm_context(request):
     return HttpResponseNotAllowed(["POST"])
 
 
-@csrf_exempt
+@api_view(["POST"])
 def generate_reply(request):
-    return generate_completion(request)
+    return _generate_completion(request)
 
 
 @api_view(["POST"])

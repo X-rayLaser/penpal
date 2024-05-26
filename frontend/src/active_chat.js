@@ -280,6 +280,7 @@ class ActiveChat extends React.Component {
         this.handleMaxTokensChange = this.handleMaxTokensChange.bind(this);
         this.handleRepeatPenaltyChange = this.handleRepeatPenaltyChange.bind(this);
         this.handleSystemMessageChanged = this.handleSystemMessageChanged.bind(this);
+
     }
 
     componentDidMount() {
@@ -451,6 +452,89 @@ class ActiveChat extends React.Component {
     }
 
     generateData() {
+        let leaf = traverseTree(this.state.chatTree, this.state.treePath);
+
+        let prompt = this.preparePromptWithRecreatedConversation();
+
+        console.log(`(new) sys message: ${this.state.system_message}`)
+        console.log("(new) full prompt!!!:")
+        console.log(prompt);
+
+        let llmSettings = {
+            temperature: this.state.temperature,
+            top_k: this.state.top_k,
+            top_p: this.state.top_p,
+            min_p: this.state.min_p,
+            n_predict: this.state.n_predict,
+            repeat_penalty: this.state.repeat_penalty
+        };
+
+        let inferenceConfig = {
+            repo_id: this.state.configuration.model_repo,
+            file_name: this.state.configuration.file_name,
+            launch_params: this.state.configuration.launch_params
+        };
+
+        const listener = msgEvent => {
+            let payload = JSON.parse(msgEvent.data);
+            console.log("got event!", event)
+            if (payload.event === "end_of_stream") {
+                this.props.websocket.removeEventListener("message", listener);
+
+                let generatedText = this.state.completion;
+
+                let promise = this.postText(generatedText, leaf.id);
+
+                promise.then(message => {
+                    const url = `/chats/generate_speech/${message.id}/`;
+                    const fetcher = new GenericFetchJson();
+                    fetcher.method = "POST";
+                    return fetcher.performFetch(url);
+                }).then(message => {
+                    this.setState(prevState => {
+                        let res = addMessage(
+                            prevState.chatTree, prevState.treePath, leaf.id, message
+                        );
+
+                        return {
+                            prompt: "",
+                            completion: "",
+                            inProgress: false,
+                            chatTree: res.tree,
+                            contextLoaded: true,
+                            treePath: res.thread,
+                            generationError: ""
+                        }
+                    });
+                });
+                return;
+            } else if (payload.event === "tokens_arrived") {
+                console.log("got chunk!", payload, payload.data)
+                this.setState(prevState => {
+                    return {
+                        completion: prevState.completion + payload.data
+                    }
+                });
+            }
+        };
+
+        this.props.websocket.addEventListener("message", listener);
+
+        let fetcher = new GenericFetchJson();
+        fetcher.method = "POST";
+        fetcher.body = {
+            prompt,
+            inference_config: inferenceConfig,
+            clear_context: true,
+            llm_settings: llmSettings
+        };
+
+        fetcher.performFetch('/chats/generate_reply/').catch(error => {
+            console.error('Failed to generate response', error);
+        });
+    }
+
+    generateDataOld() {
         let leaf = traverseTree(this.state.chatTree, this.state.treePath);
         let committedText = "";
 

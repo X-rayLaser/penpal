@@ -49,6 +49,9 @@ class App extends React.Component {
 }
 
 
+const socket = new WebSocket("ws://localhost:9000");
+
+
 const router = createHashRouter([
     {
         path: "/",
@@ -65,7 +68,7 @@ const router = createHashRouter([
             },
             {
                 path: "/chats/:id/",
-                element: <ActiveChat />
+                element: <ActiveChat websocket={socket} />
             },
             {
                 path: "/configurations/",
@@ -86,6 +89,7 @@ const router = createHashRouter([
         ]
     }
 ]);
+
 
 // Render your React component instead
 const root = createRoot(document.getElementById('react_app'));
