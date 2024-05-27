@@ -1,7 +1,7 @@
 import React from 'react';
 
 import { getConversationText, includeSystemMessage } from './tree';
-
+import { GenericFetchJson } from './generic_components';
 import {
     useLocation,
     useNavigate,
@@ -21,65 +21,81 @@ export const withRouter = WrappedComponent => props => {
     );
 };
 
+export class TextCompletionGenerator {
+    constructor(inferenceConfig, llmSettings, tokenStreamer) {
+        this.inferenceConfig = inferenceConfig;
+        this.llmSettings = llmSettings;
+        this.onChunk = chunk => {};
+        this.onPaused = textSegment => {};
+        this.streamer = tokenStreamer;
 
-export function generateResponse(prompt, inferenceConfig, llmSettings, onChunk, onPaused, onDone, onError) {
-    let generatedText = "";
-    let lastChunk = "";
+        if (!this.streamer) {
+            this.streamer = new JsonResponseStreamer('/chats/generate_reply/', 'POST');
+        }
+    }
 
-    let body = {
-        prompt,
-        inference_config: inferenceConfig,
-        clear_context: true,
-        llm_settings: llmSettings
-    };
+    generate(prompt) {
+        return new Promise((resolve, reject) => {
+            const generateWithResolvedAPICalls = (currentPrompt) => {
+                let generatedText = "";
+                let body = this.prepareBody(currentPrompt);
 
-    const handleChunk = chunk => {
-        console.log('chunk:', chunk);
-        generatedText += chunk;
-        lastChunk = chunk;
-        onChunk(generatedText, chunk);
-    };
+                this.streamer.onChunk = chunk => {
+                    generatedText += chunk;
+                    this.onChunk(generatedText, chunk);
+                };
 
-    
-    const handleDone = () => {
+                this.streamer.stream(body).then(() => {
+                    let encodedText = encodeURIComponent(generatedText);
+                    let findApiUrl = `/chats/find_api_call/?text=${encodedText}`;
 
-        console.log('handleDone in GENERATERESPONSE');
-        console.log(generatedText);
+                    fetch(findApiUrl).then(response => response.json()).then(data => {
 
-        let encodedText = encodeURIComponent(generatedText);
-        let findApiUrl = `/chats/find_api_call/?text=${encodedText}`;
-        fetch(findApiUrl).then(response => response.json()).then(data => {
-            console.log("CALLED FIND API CALL", data)
-            if (data.hasOwnProperty('offset')) {
-                let offset = data.offset;
-                let api_call = data.api_call;
-
-                let textSlice = generatedText.substring(0, offset);
-                console.log("APICALL URL", api_call.url);
-                fetch(api_call.url, {
-                    headers: {
-                        'Accept': 'application/json'
-                    }
-                }).then(response => response.json()).then(data => {
-                    let finalizedSegment = textSlice + data.api_call_string;
-    
-                    onPaused(finalizedSegment);
-                    let newPrompt = prompt + finalizedSegment;
-                    generateResponse(newPrompt, inferenceConfig, llmSettings, onChunk, onPaused, onDone, onError);
+                        if (data.hasOwnProperty('offset')) {
+                            this.makeApiCall(data, generatedText).then(finalizedSegment => {
+                                this.onPaused(finalizedSegment);
+                                let newPrompt = currentPrompt + finalizedSegment;
+                                generateWithResolvedAPICalls(newPrompt);
+                            });
+                        } else {
+                            resolve(generatedText);
+                        }
+                    });
+                }).catch(reason => {
+                    console.error(reason);
+                    reject(reason.error);
                 });
-            } else {
-                console.log("API call not found");
-                onDone(generatedText);
             }
+
+            generateWithResolvedAPICalls(prompt);
         });
     }
 
-    streamJsonResponse(
-        '/chats/generate_reply/', 'POST', body, handleChunk, handleDone
-    ).catch(reason => {
-        onError(reason.error);
-    });
+    prepareBody(prompt) {
+        return {
+            prompt,
+            inference_config: this.inferenceConfig,
+            clear_context: true,
+            llm_settings: this.llmSettings
+        };
+    }
+
+    makeApiCall(callInfo, generatedText) {
+        let offset = callInfo.offset;
+        let api_call = callInfo.api_call;
+
+        let textSlice = generatedText.substring(0, offset);
+        return fetch(api_call.url, {
+            headers: {
+                'Accept': 'application/json'
+            }
+        }).then(response => response.json()).then(data => {
+            let finalizedSegment = textSlice + data.api_call_string;
+            return finalizedSegment;
+        });
+    }
 }
+
 
 class ApiCall {
     constructor(name, argString, offset) {
@@ -133,40 +149,106 @@ function findPendingApiCall(generatedText) {
 }
 
 export function streamJsonResponse(url, method, data, handleChunk, handleDone) {
-    return fetch(url, {
-        method: method,
-        body: JSON.stringify(data),
-        headers: {
-            "Content-Type": "application/json"
-        }
-    }).then(response => {
-        let reader = response.body.getReader();
+    return new Promise((resolve, reject) => {
+        fetch(url, {
+            method: method,
+            body: JSON.stringify(data),
+            headers: {
+                "Content-Type": "application/json"
+            }
+        }).then(response => {
+            let reader = response.body.getReader();
 
-        if (!response.ok) {
-            throw {
-                error: response.statusText
-            };
-        }
-
-        // handle server error
-        reader.read().then(function pump({ done, value }) {
-            console.log('ok?', response.ok)
-            if (done) {
-                handleDone();
-                return;
+            if (!response.ok) {
+                throw {
+                    error: response.statusText
+                };
             }
 
-            let chunk = new TextDecoder().decode(value);
+            // handle server error
+            reader.read().then(function pump({ done, value }) {
+                console.log('ok?', response.ok)
+                if (done) {
+                    handleDone();
+                    resolve();
+                    return;
+                }
 
-            handleChunk(chunk);
-            
-            return reader.read().then(pump).catch(reason => {
+                let chunk = new TextDecoder().decode(value);
+
+                handleChunk(chunk);
+                
+                return reader.read().then(pump).catch(reason => {
+                    console.error(reason);
+                    reject(reason);
+                });
+            }).catch(reason => {
                 console.error(reason);
+                reject(reason);
             });
-        }).catch(reason => {
-            console.error(reason);
         });
     });
+}
+
+
+class BaseResponseStreamer {
+    constructor(url, method) {
+        this.url = url;
+        this.method = method || 'POST';
+
+        this.onChunk = function(chunk) {}
+        this.onDone = function() {};
+    }
+
+    stream(data) {
+        data = data || {};
+        return this.getStreamPromise(data);
+    }
+
+    getStreamPromise(data) {
+        return undefined;
+    }
+}
+
+
+export class JsonResponseStreamer extends BaseResponseStreamer {
+    getStreamPromise(data) {
+        return streamJsonResponse(this.url, this.method, data, this.onChunk, this.onDone);
+    }
+}
+
+export class WebsocketResponseStreamer extends BaseResponseStreamer {
+    constructor(url, method, websocket) {
+        super(url, method);
+        this.websocket = websocket;
+    }
+
+    getStreamPromise(data) {
+        return new Promise((resolve, reject) => {
+            let tokenString = "";
+            const alistener = msgEvent => {
+                let payload = JSON.parse(msgEvent.data);
+                if (payload.event === "end_of_stream") {
+                    this.websocket.removeEventListener("message", alistener);
+                    this.onDone();
+                    resolve(tokenString);
+                } else if (payload.event === "tokens_arrived") {
+                    tokenString += payload.data;
+                    this.onChunk(payload.data);
+                }
+            };
+
+            this.websocket.addEventListener("message", alistener);
+            let fetcher = new GenericFetchJson();
+            fetcher.method = this.method;
+
+            fetcher.body = data;
+            fetcher.performFetch(this.url).catch(error => {
+                reject(error);
+                console.error('Failed to generate response', error);
+            });
+        });
+    }
 }
 
 
