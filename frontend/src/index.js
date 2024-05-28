@@ -119,6 +119,18 @@ class App extends React.Component {
 
 const socket = new WebSocket("ws://localhost:9000");
 
+function getRandomInt(max) {
+    return Math.floor(Math.random() * max);
+}
+
+let n = getRandomInt(Math.pow(2, 31));
+let socketSessionId = `${n}`;
+
+
+socket.addEventListener("open", (event) => {
+    socket.send(socketSessionId);
+});
+
 
 const router = createHashRouter([
     {
@@ -136,7 +148,7 @@ const router = createHashRouter([
             },
             {
                 path: "/chats/:id/",
-                element: <ActiveChat websocket={socket} />
+                element: <ActiveChat websocket={socket} socketSessionId={socketSessionId} />
             },
             {
                 path: "/configurations/",

@@ -55,10 +55,11 @@ def _generate_completion(request):
     inference_config = body.get("inference_config")
     llm_settings = body.get("llm_settings", {})
     clear_context = body.get("clear_context", False)
+    socket_session_id = body.get("socketSessionId")
 
     if prompt:
         print("about to start streaming. Prompt:", prompt)
-        task = generate_llm_response.delay(prompt, inference_config, clear_context, llm_settings)
+        task = generate_llm_response.delay(prompt, inference_config, clear_context, llm_settings, socket_session_id)
         return Response({'task_id': task.task_id})
 
     return Response({'errors': ["Expected 'prompt' field in json request body"]}, 

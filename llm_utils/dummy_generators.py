@@ -15,6 +15,16 @@ class DummyGenerator(TokenGenerator):
         yield random.choice(words)
 
 
+class DummyPhraseGenerator(TokenGenerator):
+    def stream_tokens(self, prompt, inference_config=None, clear_context=False, llm_settings=None):
+        words = ["The", "quick", "brown", "fox", "jumps", "over", "the", "lazy", "dog"]
+
+        for word in words:
+            sleep_secs = random.random()
+            time.sleep(sleep_secs)
+            yield word + " "
+
+
 class DummyMarkdownGenerator(TokenGenerator):
     def stream_tokens(self, prompt, inference_config=None, clear_context=False, llm_settings=None):
         tokens = ["Of", " ", "course", ".", " ", "Here" " ", "is", " ", "the", " ", "code", ":", "\n", 

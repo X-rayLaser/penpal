@@ -5,7 +5,7 @@ import websockets
 import redis.asyncio as redis
 
 STOPWORD = ""
-TOKEN_STREAM = "token_stream:1"
+TOKEN_STREAM = "token_stream"
 
 
 r = redis.from_url("redis://localhost")
@@ -13,12 +13,18 @@ r = redis.from_url("redis://localhost")
 
 async def handler(websocket):
     async with r.pubsub() as pubsub:
-        await pubsub.subscribe(TOKEN_STREAM)
+        socket_session_id = await websocket.recv()
+        print(f"<<< Got web socket session id: {socket_session_id}")
+
+        channel = f'{TOKEN_STREAM}:{socket_session_id}'
+
+        await pubsub.subscribe(channel)
         
         while True:
             message = await pubsub.get_message(ignore_subscribe_messages=True)
             if message is not None:
                 text = message["data"].decode()
+
                 if text == STOPWORD:
                     message = json.dumps({'event': 'end_of_stream', 'data': text})
                 else:

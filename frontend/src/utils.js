@@ -22,12 +22,13 @@ export const withRouter = WrappedComponent => props => {
 };
 
 export class TextCompletionGenerator {
-    constructor(inferenceConfig, llmSettings, tokenStreamer) {
+    constructor(inferenceConfig, llmSettings, tokenStreamer, socketSessionId) {
         this.inferenceConfig = inferenceConfig;
         this.llmSettings = llmSettings;
         this.onChunk = chunk => {};
         this.onPaused = textSegment => {};
         this.streamer = tokenStreamer;
+        this.socketSessionId = socketSessionId;
 
         if (!this.streamer) {
             this.streamer = new JsonResponseStreamer('/chats/generate_reply/', 'POST');
@@ -76,7 +77,8 @@ export class TextCompletionGenerator {
             prompt,
             inference_config: this.inferenceConfig,
             clear_context: true,
-            llm_settings: this.llmSettings
+            llm_settings: this.llmSettings,
+            socketSessionId: this.socketSessionId
         };
     }
 

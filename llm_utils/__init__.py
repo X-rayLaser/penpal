@@ -12,7 +12,6 @@ generator_class = parts[-1]
 cls = getattr(importlib.import_module(module_path), generator_class)
 token_generator = cls(**generator_kwargs)
 
-
 # todo: remove functions below, use token generator instance directly in views
 
 
