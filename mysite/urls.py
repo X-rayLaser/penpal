@@ -20,9 +20,17 @@ from django.urls import include, path
 from django.shortcuts import render
 from django.conf.urls.static import static
 from django.conf import settings
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
 
 def spa(request):
     return render(request, 'spa.html')
+
+
+@api_view(["GET"])
+def whoami(request):
+    name = request.user.username if request.user.is_authenticated else None
+    return Response({'user': name})
 
 
 urlpatterns = [
@@ -30,8 +38,11 @@ urlpatterns = [
     path("chats/", include("chats.urls")),
     path("modelhub/", include("modelhub.urls")),
     path("admin/", admin.site.urls),
-    path('api-auth/', include('rest_framework.urls'))
+    path('api-auth/', include('rest_framework.urls')),
+    path('accounts/', include('allauth.urls')),
+    path('whoami/', whoami)
 ]
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+

@@ -6,3 +6,4 @@ huggingface_hub
 music21
 celery
 websockets
+django-allauth
