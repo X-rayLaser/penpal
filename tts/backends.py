@@ -24,10 +24,11 @@ class DummyTtsBackend(BaseTtsBackend):
 class RemoteTtsBackend(BaseTtsBackend):
     endpoint = "/tts/"
 
-    def __init__(self, host, port, use_tls=True):
+    def __init__(self, host, port, use_tls=True, proxies=None):
         self.host = host
         self.port = port
         self.use_tls = use_tls
+        self.proxies = proxies or {}
 
     def __call__(self, text):
         protocol = "http"
@@ -39,7 +40,7 @@ class RemoteTtsBackend(BaseTtsBackend):
             "text": text
         }
         headers = {'Content-Type': 'application/json'}
-        resp = requests.post(url, data=json.dumps(body), headers=headers)
+        resp = requests.post(url, data=json.dumps(body), headers=headers, proxies=self.proxies)
 
         audio = None
         if resp.status_code == 200:

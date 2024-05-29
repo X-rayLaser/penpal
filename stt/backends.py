@@ -1,5 +1,4 @@
 import requests
-import wave
 import subprocess
 
 
@@ -21,10 +20,11 @@ class DummySpeechToTextBackend(BaseSpeechToTextBackend):
 class RemoteSpeechToTextBackend(BaseSpeechToTextBackend):
     endpoint = "/inference"
 
-    def __init__(self, host, port, use_tls=True):
+    def __init__(self, host, port, use_tls=True, proxies=None):
         self.host = host
         self.port = port
         self.use_tls = use_tls
+        self.proxies = proxies or {}
 
     def __call__(self, audio):
         opus_path = "test_data/my_speech1.opus"
@@ -43,7 +43,7 @@ class RemoteSpeechToTextBackend(BaseSpeechToTextBackend):
 
         headers = {'Accept': 'application/json'}
         files = {'file': open(wav_path, 'rb')}
-        resp = requests.post(url, files=files, headers=headers)
+        resp = requests.post(url, files=files, headers=headers, proxies=self.proxies)
 
         files['file'].close()
 

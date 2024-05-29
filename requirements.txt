@@ -1,5 +1,5 @@
 Django<5
-requests
+requests[socks]
 djangorestframework
 markdown
 huggingface_hub

@@ -3,10 +3,27 @@ import json
 from .base import TokenGenerator
 
 
+class RequestMaker:
+    def __init__(self, proxies=None):
+        self.proxies = proxies or {}
+
+    def get(self, *args, **kwargs):
+        if self.proxies:
+            kwargs["proxies"] = self.proxies
+        return requests.get(*args, **kwargs)
+
+    def post(self, *args, **kwargs):
+        if self.proxies:
+            kwargs["proxies"] = self.proxies
+        return requests.post(*args, **kwargs)
+
+
 class RemoteLLM(TokenGenerator):
-    def __init__(self, host, port):
+    def __init__(self, host, port, proxies=None):
         self.host = host
         self.port = port
+        self.proxies = proxies or {}
+        self.request_maker = RequestMaker(proxies)
 
     def stream_tokens(self, prompt, inference_config=None, clear_context=False, llm_settings=None):
         llm_settings = llm_settings or {}
@@ -22,13 +39,13 @@ class RemoteLLM(TokenGenerator):
 
         headers = {'Content-Type': 'application/json'}
 
-        resp = requests.post(start_llm_url, data=json.dumps(data), headers=headers)
+        resp = self.request_maker.post(start_llm_url, data=json.dumps(data), headers=headers)
         if resp.status_code != 200:
             raise PrepareModelError("Failed to configure and start model")
 
         if clear_context:
             url = f"http://{self.host}:{self.port}/clear-context"
-            resp = requests.post(url)
+            resp = self.request_maker.post(url)
             if resp.status_code != 200:
                 raise ClearContextError("Failed to clear context")
 
@@ -40,7 +57,7 @@ class RemoteLLM(TokenGenerator):
         payload.update(llm_settings)
 
         
-        resp = requests.post(url, data=json.dumps(payload), headers=headers, stream=True)
+        resp = self.request_maker.post(url, data=json.dumps(payload), headers=headers, stream=True)
         for line in resp.iter_lines(chunk_size=1):
             if line:
                 line = line.decode('utf-8')
@@ -70,7 +87,7 @@ class ManagedRemoteLLM(RemoteLLM):
         url = self.make_full_url("/download-llm")
         body = dict(repo=repo, file_name=file_name, size=size)
         headers = {'Content-Type': 'application/json'}
-        resp = requests.post(url, data=json.dumps(body), headers=headers)
+        resp = self.request_maker.post(url, data=json.dumps(body), headers=headers)
         obj = resp.json()
         if resp.status_code != 200:
             raise DownloadStartFailed(obj)
@@ -83,18 +100,18 @@ class ManagedRemoteLLM(RemoteLLM):
 
     def downloads_in_progress(self):
         url = self.make_full_url("/downloads-in-progress")
-        resp = requests.get(url)
+        resp = self.request_maker.get(url)
         return resp.json()
 
     def failed_downloads(self):
         url = self.make_full_url("/failed-downloads")
-        resp = requests.get(url)
+        resp = self.request_maker.get(url)
         return resp.json()
 
     def list_installed_models(self):
         """Returns a list of models installed on the LLM server"""
         url = self.make_full_url("/list-models")
-        resp = requests.get(url)
+        resp = self.request_maker.get(url)
         return resp.json()
 
     def configure_llm(self, config):
@@ -111,7 +128,7 @@ class ManagedRemoteLLM(RemoteLLM):
 
     def post_json(self, url, body):
         headers = {'Content-Type': 'application/json'}
-        resp = requests.post(url, data=json.dumps(body), headers=headers)
+        resp = self.request_maker.post(url, data=json.dumps(body), headers=headers)
         return resp.json()
 
 
