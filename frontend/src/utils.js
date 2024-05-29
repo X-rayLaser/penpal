@@ -50,7 +50,9 @@ export class TextCompletionGenerator {
                     let encodedText = encodeURIComponent(generatedText);
                     let findApiUrl = `/chats/find_api_call/?text=${encodedText}`;
 
-                    fetch(findApiUrl).then(response => response.json()).then(data => {
+                    let fetcher = new GenericFetchJson();
+
+                    fetcher.performFetch(findApiUrl).then(data => {
 
                         if (data.hasOwnProperty('offset')) {
                             this.makeApiCall(data, generatedText).then(finalizedSegment => {
@@ -87,11 +89,10 @@ export class TextCompletionGenerator {
         let api_call = callInfo.api_call;
 
         let textSlice = generatedText.substring(0, offset);
-        return fetch(api_call.url, {
-            headers: {
-                'Accept': 'application/json'
-            }
-        }).then(response => response.json()).then(data => {
+
+        let fetcher = new GenericFetchJson();
+
+        return fetcher.performFetch(api_call.url).then(data => {
             let finalizedSegment = textSlice + data.api_call_string;
             return finalizedSegment;
         });
@@ -150,6 +151,7 @@ function findPendingApiCall(generatedText) {
     return new ApiCall(name, argString, offset);
 }
 
+//deprecated
 export function streamJsonResponse(url, method, data, handleChunk, handleDone) {
     return new Promise((resolve, reject) => {
         fetch(url, {

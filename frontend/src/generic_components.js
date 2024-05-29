@@ -1,15 +1,10 @@
 import React from 'react';
-import Button from 'react-bootstrap/Button';
 import Alert from 'react-bootstrap/Alert';
 import Spinner from 'react-bootstrap/Spinner';
 import Card from 'react-bootstrap/Card';
-import Form from 'react-bootstrap/Form';
-import Col from 'react-bootstrap/Col';
-import Row from 'react-bootstrap/Row';
 import Accordion from 'react-bootstrap/Accordion';
 import Toast from 'react-bootstrap/Toast';
 import ToastContainer from 'react-bootstrap/ToastContainer';
-import { withRouter } from "./utils";
 
 
 function getCookie(name) {
@@ -28,7 +23,7 @@ function getCookie(name) {
     return cookieValue;
 }
 
-const csrftoken = getCookie('csrftoken');
+export const csrftoken = getCookie('csrftoken');
 
 
 class ItemListWithForm extends React.Component {
@@ -225,7 +220,7 @@ class GenericFetchJson {
         this.method = 'GET';
         this.body = {};
         this.okRespondWithJson = true;
-        this.withCsrfToken = false;
+        this.withCsrfToken = true;
 
         this.messages = {
             "404": "Fetch failed: resource not found (404)",
@@ -256,7 +251,7 @@ class GenericFetchJson {
             }
         }
 
-        if (this.method !== 'GET' && this.withCsrfToken) {
+        if (this.method !== 'GET' && this.withCsrfToken && csrftoken) {
             requestParams.headers['X-CSRFToken'] = csrftoken;
         }
 

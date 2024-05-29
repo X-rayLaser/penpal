@@ -1,3 +1,6 @@
+import { GenericFetchJson } from "./generic_components";
+
+
 class Node {
     constructor(id, data, parent, replies, branchIndex) {
         this.id = id;
@@ -60,13 +63,9 @@ function fixBranch(node) {
 }
 
 export function fetchTree(url) {
-    return fetch(url, {
-        method: "GET",
-        headers: {
-            "Content-Type": "application/json"
-        }
-    }).then(response => response.json()).then(obj => {
+    let fetcher = new GenericFetchJson();
 
+    return fetcher.performFetch(url).then(obj => {
         console.log("fetch tree:", obj)
         return buildTree(obj);
     });

@@ -305,13 +305,11 @@ class ActiveChat extends React.Component {
         }).finally(() => {
             loadedTree = true;
             declareLoaded();
-        });;
+        });
 
-        fetch(chatUrl, {
-            headers: {
-                "Accept": "application/json"
-            }
-        }).then(response => response.json()).then(data => {
+        let fetcher = new GenericFetchJson();
+
+        fetcher.performFetch(chatUrl).then(data => {
             if (!data.configuration_ro) {
                 return;
             }
@@ -339,9 +337,7 @@ class ActiveChat extends React.Component {
             }
 
             if (tools.length > 0) {
-                fetch(`/chats/tools-spec/?conf_id=${config.id}`).then(response => 
-                    response.json()
-                ).then(data => {
+                fetcher.performFetch(`/chats/tools-spec/?conf_id=${config.id}`).then(data => {
                     console.log("NEW DATA:", data)
                     this.setState({ toolText: data.spec });
                 }).catch(reason => {

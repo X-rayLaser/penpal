@@ -110,15 +110,8 @@ class ChatsList extends React.Component {
     componentDidMount() {
         this.loadPage();
 
-        fetch('/chats/configurations/', {
-            method: "GET",
-            headers: {
-                "Content-Type": "application/json",
-                "Accept": "application/json"
-            }
-        }).then(response => {
-            return response.json();
-        }).then(data => {
+        let fetcher = new GenericFetchJson();
+        fetcher.performFetch('/chats/configurations/').then(data => {
             let name_to_config = {};
             data.forEach(conf => {
                 name_to_config[conf.name] = conf;
@@ -146,15 +139,9 @@ class ChatsList extends React.Component {
             loading_chats: true
         });
 
-        fetch(url, {
-            method: "GET",
-            headers: {
-                "Content-Type": "application/json",
-                "Accept": "application/json"
-            }
-        }).then(response => {
-            return response.json();
-        }).then(data => {
+        let fetcher = new GenericFetchJson();
+
+        fetcher.performFetch(url).then(data => {
             let results = data.results;
             this.setState({
                 chats: results,
@@ -197,16 +184,11 @@ class ChatsList extends React.Component {
             }
         }
 
-        fetch('/chats/chats/', {
-            method: 'POST',
-            body: JSON.stringify(body),
-            headers: {
-                "Content-Type": "application/json",
-                "Accept": "application/json"
-            }
-        }).then(response => {
-            return response.json();
-        }).then(data => {
+        let fetcher = new GenericFetchJson();
+        fetcher.method = 'POST';
+        fetcher.body = body;
+
+        fetcher.performFetch('/chats/chats/').then(data => {
             console.log(data);
             self.props.router.navigate(`/chats/${data.id}/`);
         });

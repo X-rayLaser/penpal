@@ -8,6 +8,7 @@ import Col from 'react-bootstrap/Col';
 import Row from 'react-bootstrap/Row';
 import { Link } from "react-router-dom";
 import { withRouter } from "./utils";
+import { GenericFetchJson, csrftoken } from './generic_components';
 
 
 function SystemMessage(props) {
@@ -41,14 +42,9 @@ class SystemMessageList extends React.Component {
     }
 
     componentDidMount() {
-        fetch('/chats/system_messages/', {
-            headers: {
-                "Content-Type": "application/json",
-                "Accept": "application/json"
-            }
-        }).then(response => {
-            return response.json();
-        }).then(data => {
+        let fetcher = new GenericFetchJson();
+
+        fetcher.performFetch('/chats/system_messages/').then(data => {
             console.log(data);
             this.setState({ messages: data});
         });
@@ -79,7 +75,8 @@ class SystemMessageList extends React.Component {
             method: 'POST',
             body: JSON.stringify(body),
             headers: {
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "X-CSRFToken": csrftoken
             }
         }).then(response => {
             if (response.ok) {

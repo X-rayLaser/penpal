@@ -84,7 +84,9 @@ class ModelControlPanel extends React.Component {
     }
 
     syncStateLists(url, listKey) {
-        fetch(url).then(response => response.json()).then(data => {
+        let fetcher = new GenericFetchJson();
+
+        fetcher.performFetch(url).then(data => {
             let patch = {};
             patch[listKey] = data
             this.setState(patch);
@@ -274,7 +276,9 @@ class HuggingfaceHubRepositoryViewer extends React.Component {
         this.setState({ searching: true });
 
         //todo: handle errors gracefully
-        fetch(url).then(response => response.json()).then(foundItems => {
+        let fetcher = new GenericFetchJson();
+
+        fetcher.performFetch(url).then(foundItems => {
             this.setState({ foundItems });
         }).finally(() => {
             this.setState({ searching: false });
@@ -296,7 +300,9 @@ class HuggingfaceHubRepositoryViewer extends React.Component {
         const url = `/modelhub/repo-detail/?repo_id=${repoId}`;
 
         //todo: handle errors gracefully
-        fetch(url).then(response => response.json()).then(ggufFiles => {
+        let fetcher = new GenericFetchJson();
+        
+        fetcher.performFetch(url).then(ggufFiles => {
             this.setState({ ggufFiles });
         }).finally(() => {
             this.setState({ detailLoading: false });
