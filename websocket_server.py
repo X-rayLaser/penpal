@@ -4,7 +4,7 @@ import argparse
 import websockets
 import redis.asyncio as redis
 
-STOPWORD = ""
+STOPWORD = "[|END_OF_STREAM|]"
 TOKEN_STREAM = "token_stream"
 
 
