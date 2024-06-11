@@ -1,6 +1,7 @@
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.contrib.auth.models import User
+from rest_framework.reverse import reverse
 
 
 class SystemMessage(models.Model):
@@ -113,3 +114,15 @@ class Message(models.Model):
             return []
         
         return self.parent.replies.all()
+
+
+class SpeechSample(models.Model):
+    text = models.CharField(max_length=1024)
+    audio = models.FileField(upload_to="uploads/audio")
+    date_time = models.DateTimeField(auto_now_add=True, blank=True)
+
+    def __str__(self) -> str:
+        return self.text
+
+    def get_absolute_url(self):
+        return reverse('speechsample-detail', args=[self.pk])

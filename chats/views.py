@@ -1,24 +1,30 @@
 import json
+import os
+import wave
+import uuid
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import viewsets, generics
 from rest_framework.parsers import BaseParser
 from rest_framework.decorators import parser_classes
+from rest_framework.renderers import BaseRenderer
 
 from django.http.response import StreamingHttpResponse, HttpResponseNotAllowed, HttpResponseBadRequest
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import get_object_or_404
 from django.core.files.base import ContentFile
+from django.conf import settings
 
-from .models import SystemMessage, Preset, Configuration, Chat, Message
+from .models import SystemMessage, Preset, Configuration, Chat, Message, SpeechSample
 from .serializers import (
     ChatSerializer,
     ConfigurationSerializer,
     PresetSerializer,
     MessageSerializer,
     TreebankSerializer,
-    SystemMessageSerializer
+    SystemMessageSerializer,
+    SpeechSampleSerializer
 )
 import llm_utils
 from tools import llm_tools, get_specification
@@ -32,6 +38,19 @@ from tts import tts_backend
 from stt import stt_backend
 from .pagination import DefaultPagination
 from .tasks import generate_llm_response
+
+
+class BinaryRenderer(BaseRenderer):
+    media_type = 'application/octet-stream'
+    format = 'bin'
+    render_style = 'binary'
+    charset = None
+
+    def render(self, data, media_type=None, renderer_context=None):
+        view = renderer_context['view']
+        with open(view.get_object().audio.path, 'rb') as f:
+            return f.read()
+    
 
 class SystemMessageViewSet(viewsets.ModelViewSet):
     serializer_class = SystemMessageSerializer
@@ -47,6 +66,14 @@ class ConfigurationViewSet(viewsets.ModelViewSet):
     serializer_class = ConfigurationSerializer
     queryset = Configuration.objects.all()
 
+
+class SpeechSampleViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = SpeechSampleSerializer
+    queryset = SpeechSample.objects.all()
+    renderer_classes = [BinaryRenderer]
+
+    def retrieve(self, request, *args, **kwargs):
+        return super().retrieve(request, *args, **kwargs)
 
 
 def _generate_completion(request):
@@ -85,10 +112,41 @@ def generate_reply(request):
     return _generate_completion(request)
 
 
+def join_wavs(samples, result_path):
+    data= []
+    params = None
+
+    for sample in samples:
+        file_field = sample.audio
+        w = wave.open(file_field.path, 'rb')
+        params = w.getparams()
+        data.append(w.readframes(w.getnframes()))
+        w.close()
+
+    with wave.open(result_path, 'wb') as output:
+        output.setparams(params)
+        for row in data:
+            output.writeframes(row)
+
+    with open(result_path, 'rb') as f:
+        res = f.read()
+    
+    os.remove(result_path)
+    return res
+
+
 @api_view(["POST"])
 def generate_speech(request, message_pk):
+    # todo: move this heavy logic to a separate celery task
     message = get_object_or_404(Message, pk=message_pk)
-    audio_data = tts_backend(message.text)
+
+    sample_ids = request.data["samples"]
+
+    wav_files = SpeechSample.objects.filter(id__in=sample_ids)
+
+    output_name = f'{uuid.uuid4().hex}.wav'
+    output_path = os.path.join(settings.MEDIA_ROOT, output_name)
+    audio_data = join_wavs(wav_files, output_path)
 
     if audio_data:
         audio_file = ContentFile(audio_data, name="tts-audio-file.wav")
@@ -97,7 +155,6 @@ def generate_speech(request, message_pk):
     
     ser = MessageSerializer(message, context={'request': request})
     return Response(ser.data, status=status.HTTP_200_OK)
-
 
 
 class BinaryParser(BaseParser):

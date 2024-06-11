@@ -1,8 +1,14 @@
 import re
 import markdown
 from rest_framework import serializers
-from .models import SystemMessage, Preset, Configuration, Chat, Message
+from .models import SystemMessage, Preset, Configuration, Chat, Message, SpeechSample
 from tools.api_calls import backend
+
+
+class SpeechSampleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SpeechSample
+        fields = ['id', 'text', 'audio']
 
 
 class SystemMessageSerializer(serializers.ModelSerializer):

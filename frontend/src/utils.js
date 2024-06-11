@@ -256,6 +256,129 @@ export class WebsocketResponseStreamer extends BaseResponseStreamer {
 }
 
 
+export class BufferringAudioAutoPlayer {
+    constructor() {
+        this.pieces = [];
+        this.playing = false;
+        this.bufferSize = null;
+        this.player = new AudioPlaylistPlayer();
+    }
+
+    put(audioPiece) {
+        this.pieces.push(audioPiece);
+
+        if (!this.playing) {
+            this.player.putNoPlay(audioPiece);
+        } else {
+            this.player.put(audioPiece);
+        }
+
+        if (this.bufferSize && this.getTotalChars() > this.bufferSize && !this.playing) {
+            this.playback();
+        }
+    }
+
+    playback() {
+        this.playing = true;
+        this.player.play();
+    }
+
+    calculateBufferSize(audioText) {
+        let totalChars = 0;
+        let totalGenerationTimeSecs = 0;
+        this.pieces.forEach(piece => {
+            totalChars += piece.text.length;
+            totalGenerationTimeSecs += piece.gen_time_seconds;
+        });
+
+        let generationTimePerChar = totalGenerationTimeSecs / totalChars;
+        let N = audioText.length;
+        let t = generationTimePerChar;
+        this.bufferSize = N * t / (t + 1);
+    }
+
+    getTotalChars() {
+        let totalChars = 0;
+        this.pieces.forEach(piece => {
+            totalChars += piece.text.length;
+        });
+        return totalChars;
+    }
+}
+
+
+class AudioPlaylistPlayer {
+    constructor() {
+        this.items = [];
+        this.playInProgress = false;
+    }
+
+    play() {
+        this.playInProgress = false;
+
+        if (this.items.length === 0) {
+            return;
+        }
+
+        let nextPiece = this.items.shift();
+
+        if (!nextPiece.url) {
+            //discarding items without url
+            this.play();
+            return;
+        }
+
+        this.playInProgress = true;
+        let audio = new Audio(nextPiece.url);
+        audio.addEventListener("ended", event => {
+            this.play();
+        });
+
+        if (audio.readyState === HTMLMediaElement.HAVE_FUTURE_DATA) {
+            audio.play();
+        } else {
+            audio.addEventListener("canplaythrough", event => {
+                audio.play();
+            });
+        }
+    }
+
+    put(item) {
+        this.items.push(item);
+
+        if (!this.playInProgress) {
+            this.play();
+        }
+    }
+
+    putNoPlay(item) {
+        this.items.push(item);
+    }
+}
+
+
+export function captureAndPlaySpeech(websocket, bufferingPlayer) {
+    return new Promise((resolve, reject) => {
+        const alistener = msgEvent => {
+            let payload = JSON.parse(msgEvent.data);
+
+            if (payload.event === 'end_of_speech') {
+                websocket.removeEventListener("message", alistener);
+                if (!bufferingPlayer.playing) {
+                    bufferingPlayer.playback();
+                }
+
+                resolve(bufferingPlayer);
+            } else if (payload.event === 'speech_sample_arrived') {
+                bufferingPlayer.put(payload.data);
+            }
+        };
+
+        websocket.addEventListener('message', alistener);
+    });
+}
+
+
 export function renderSize(size) {
     const KB = 1000
     const MB = KB * 1000;

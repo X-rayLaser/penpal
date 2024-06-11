@@ -8,6 +8,7 @@ router = routers.DefaultRouter()
 router.register("system_messages", views.SystemMessageViewSet)
 router.register("presets", views.PresetViewSet)
 router.register("configurations", views.ConfigurationViewSet)
+router.register("speech-samples", views.SpeechSampleViewSet)
 
 urlpatterns = [
     path('generate_reply/', views.generate_reply),

@@ -7,7 +7,10 @@ import Pagination from 'react-bootstrap/Pagination';
 import Alert from 'react-bootstrap/Alert';
 import ButtonGroup from 'react-bootstrap/ButtonGroup';
 import Badge from 'react-bootstrap/Badge';
-import { withRouter, guessChatEncoder, ChatEncoder, WebsocketResponseStreamer, TextCompletionGenerator } from "./utils";
+import { withRouter, guessChatEncoder, ChatEncoder, 
+    WebsocketResponseStreamer, TextCompletionGenerator,
+    BufferringAudioAutoPlayer, captureAndPlaySpeech
+} from "./utils";
 import { 
     fetchTree, addNode, addMessage, selectThread, appendThread, collapseThread,
     getNodeById, getThreadMessages, getConversationText, isHumanText, includeSystemMessage
@@ -492,33 +495,46 @@ class ActiveChat extends React.Component {
             return "0";
         };
 
-        completionGenerator.generate(prompt).then(() => {
+        let bufferingPlayer = new BufferringAudioAutoPlayer();
+        const speechPromise = captureAndPlaySpeech(this.props.websocket, bufferingPlayer);
+
+        let newMessagePromise = completionGenerator.generate(prompt).then(() => {
             let generatedText = this.state.completion;
-            let promise = this.postText(generatedText, leaf.id);
+            bufferingPlayer.calculateBufferSize(generatedText);
+            return this.postText(generatedText, leaf.id);
+        });
 
-            promise.then(message => {
-                const url = `/chats/generate_speech/${message.id}/`;
-                const fetcher = new GenericFetchJson();
-                fetcher.method = "POST";
-                return fetcher.performFetch(url);
-            }).then(message => {
-                this.setState(prevState => {
-                    let res = addMessage(
-                        prevState.chatTree, prevState.treePath, leaf.id, message
-                    );
+        Promise.all([speechPromise, newMessagePromise]).then((values) => {
+            console.log('promise all', values)
+            let message = values[1];
 
-                    return {
-                        prompt: "",
-                        completion: "",
-                        inProgress: false,
-                        chatTree: res.tree,
-                        contextLoaded: true,
-                        treePath: res.thread,
-                        generationError: ""
-                    }
-                });
+            let samples = bufferingPlayer.pieces.map(piece => piece.id);
+            
+            const url = `/chats/generate_speech/${message.id}/`;
+            const fetcher = new GenericFetchJson();
+            fetcher.method = "POST";
+            fetcher.body = {
+                samples
+            };
+            return fetcher.performFetch(url);
+        }).then(message => {
+            this.setState(prevState => {
+                let res = addMessage(
+                    prevState.chatTree, prevState.treePath, leaf.id, message
+                );
+
+                return {
+                    prompt: "",
+                    completion: "",
+                    inProgress: false,
+                    chatTree: res.tree,
+                    contextLoaded: true,
+                    treePath: res.thread,
+                    generationError: ""
+                }
             });
         }).catch(reason => {
+            console.error("Generation failed: ", reason);
             this.setState({ 
                 prompt: "",
                 completion: "",
