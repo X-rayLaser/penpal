@@ -22,13 +22,14 @@ export const withRouter = WrappedComponent => props => {
 };
 
 export class TextCompletionGenerator {
-    constructor(inferenceConfig, llmSettings, tokenStreamer, socketSessionId) {
+    constructor(inferenceConfig, llmSettings, tokenStreamer, socketSessionId, chatTemplate) {
         this.inferenceConfig = inferenceConfig;
         this.llmSettings = llmSettings;
         this.onChunk = chunk => {};
         this.onPaused = textSegment => {};
         this.streamer = tokenStreamer;
         this.socketSessionId = socketSessionId;
+        this.chatTemplate = chatTemplate;
 
         if (!this.streamer) {
             this.streamer = new JsonResponseStreamer('/chats/generate_reply/', 'POST');
@@ -57,7 +58,7 @@ export class TextCompletionGenerator {
                         if (data.hasOwnProperty('offset')) {
                             this.makeApiCall(data, generatedText).then(finalizedSegment => {
                                 this.onPaused(finalizedSegment);
-                                let newPrompt = currentPrompt + finalizedSegment;
+                                let newPrompt = currentPrompt + finalizedSegment + this.chatTemplate.continuationPrefix;
                                 generateWithResolvedAPICalls(newPrompt);
                             });
                         } else {
@@ -416,24 +417,40 @@ export class TextTemplate {
 };
 
 
+const LLAMA3_START_HEADER_ID = "<|start_header_id|>";
+const LLAMA3_END_HEADER_ID = "<|end_header_id|>";
+const LLAMA3_EOT_ID = "<|eot_id|>";
+
+
+function llamaRoleTemplate(role) {
+    return `${LLAMA3_START_HEADER_ID}${role}${LLAMA3_END_HEADER_ID}\n\n%message${LLAMA3_EOT_ID}`;
+}
+
+
 let chatTemplates = {
     llama3: {
-        question: "<|start_header_id|>user<|end_header_id|>\n\n%message<|eot_id|>",
-        answer: "<|start_header_id|>assistant<|end_header_id|>\n\n%message<|eot_id|>",
-        systemMessage: "<|start_header_id|>system<|end_header_id|>\n\n%message<|eot_id|>",
-        startOfText: "<|begin_of_text|>"
+        question: llamaRoleTemplate("user"),
+        answer: llamaRoleTemplate("assistant"),
+        systemMessage: llamaRoleTemplate("system"),
+        startOfText: "<|begin_of_text|>",
+        promptSuffix: `${LLAMA3_START_HEADER_ID}assistant${LLAMA3_END_HEADER_ID}\n\n`,
+        continuationPrefix: `${LLAMA3_EOT_ID}${LLAMA3_START_HEADER_ID}assistant${LLAMA3_END_HEADER_ID}\n\n`
     },
     mistral_8b: {
         question: "[INST]%message[/INST]",
         answer: "%message",
         systemMessage: null,
-        startOfText: "<s>"
+        startOfText: "<s>",
+        promptSuffix: "",
+        continuationPrefix: ""
     },
     openLlama_3b: {
         question: "<human>%message</human>",
         answer: "<bot>%message</bot>",
         systemMessage: null,
-        startOfText: ""
+        startOfText: "",
+        promptSuffix: "<bot>",
+        continuationPrefix: "</bot><bot>"
     }
 };
 
@@ -446,8 +463,9 @@ let rawTemplateSpec = {
 
 
 export class ChatEncoder {
-    constructor(templateSpec) {
+    constructor(templateSpec, useBos) {
         this.spec = templateSpec;
+        this.useBos = useBos;
     }
 
     encode(systemMessage, messages) {
@@ -463,7 +481,10 @@ export class ChatEncoder {
             conversation = getConversationText(messages, questionTemplate, answerTemplate);
         }
 
-        conversation = this.spec.startOfText + conversation;
+        conversation = conversation + this.spec.promptSuffix;
+        if (this.useBos) {
+            conversation = this.spec.startOfText + conversation;
+        }
         return conversation;
     }
 }
@@ -488,5 +509,6 @@ export function guessChatEncoder(configuration, instructMode) {
     }
 
     console.log("using spec:", templateSpec);
-    return new ChatEncoder(templateSpec);
+    let useBos = false;
+    return new ChatEncoder(templateSpec, useBos);
 }

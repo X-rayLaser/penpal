@@ -454,7 +454,9 @@ class ActiveChat extends React.Component {
         let leaf = traverseTree(this.state.chatTree, this.state.treePath);
 
         //let prompt = this.preparePrompt(leaf);
-        let prompt = this.preparePromptWithRecreatedConversation();
+        let obj = this.preparePromptWithRecreatedConversation();
+        let prompt = obj.prompt;
+        let chatEncoder = obj.chatEncoder;
 
         console.log(`sys message: ${this.state.system_message}`)
         console.log("full prompt!!!:")
@@ -479,7 +481,7 @@ class ActiveChat extends React.Component {
         
         let streamer = new WebsocketResponseStreamer('/chats/generate_reply/', 'POST', this.props.websocket);
         let completionGenerator = new TextCompletionGenerator(
-            inferenceConfig, llmSettings, streamer, this.props.socketSessionId
+            inferenceConfig, llmSettings, streamer, this.props.socketSessionId, chatEncoder.templateSpec
         );
 
         completionGenerator.onChunk = (generatedText, chunk) => {
@@ -571,7 +573,10 @@ class ActiveChat extends React.Component {
             chatEncoder = guessChatEncoder(this.state.configuration, instructMode);
         }
 
-        return chatEncoder.encode(sysMessageText, messages);
+        return {
+            prompt: chatEncoder.encode(sysMessageText, messages),
+            chatEncoder
+        };
     }
 
     handleBranchSwitch(message, newBranchId) {
