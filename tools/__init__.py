@@ -70,7 +70,7 @@ def render_template(template):
     def make_pattern(base_pattern, action):
         return "{% " + base_pattern.format(action=action) + " %}"
 
-    base_pattern = "{action} ([A-Za-z0-9\s\"\!\?\+\-\*\/]+)"
+    base_pattern = "{action} ([A-Za-z0-9\s\"\!\?\+\-\*\/_]+)"
 
     api_call_pattern = make_pattern(base_pattern, action="apicall")
     pattern_with_result = make_pattern(base_pattern, action="call_with_result")

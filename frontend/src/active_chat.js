@@ -492,7 +492,7 @@ class ActiveChat extends React.Component {
         
         let streamer = new WebsocketResponseStreamer('/chats/generate_reply/', 'POST', this.props.websocket);
         let completionGenerator = new TextCompletionGenerator(
-            inferenceConfig, llmSettings, streamer, this.props.socketSessionId, chatEncoder.templateSpec
+            inferenceConfig, llmSettings, streamer, this.props.socketSessionId, chatEncoder.spec
         );
 
         completionGenerator.onChunk = (generatedText, chunk) => {

@@ -53,7 +53,7 @@ class RemoteLLM(TokenGenerator):
 
         stop_word = "</api>"
         print(llm_settings)
-        payload = {"prompt": prompt, "stream": True, "stop": [stop_word]}
+        payload = {"prompt": prompt, "stream": True, "stop": [stop_word], "cache_prompt": True}
         payload.update(llm_settings)
 
         
