@@ -144,11 +144,11 @@ def generate_speech(request, message_pk):
 
     wav_files = SpeechSample.objects.filter(id__in=sample_ids)
 
-    output_name = f'{uuid.uuid4().hex}.wav'
-    output_path = os.path.join(settings.MEDIA_ROOT, output_name)
-    audio_data = join_wavs(wav_files, output_path)
+    if wav_files:
+        output_name = f'{uuid.uuid4().hex}.wav'
+        output_path = os.path.join(settings.MEDIA_ROOT, output_name)
+        audio_data = join_wavs(wav_files, output_path)
 
-    if audio_data:
         audio_file = ContentFile(audio_data, name="tts-audio-file.wav")
         message.audio = audio_file
         message.save()
@@ -179,7 +179,7 @@ class ChatList(generics.ListCreateAPIView):
     pagination_class = DefaultPagination
 
 
-@api_view(['GET', 'DELETE'])
+@api_view(['GET', 'PATCH', 'DELETE'])
 def chat_detail(request, pk):
     try:
         chat = Chat.objects.get(pk=pk)
@@ -190,6 +190,12 @@ def chat_detail(request, pk):
         serializer = ChatSerializer(chat)
         return Response(serializer.data, status=status.HTTP_200_OK)
     
+    if request.method == 'PATCH':
+        serializer = ChatSerializer(chat, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
     if request.method == 'DELETE':
         chat.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)

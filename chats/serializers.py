@@ -46,19 +46,17 @@ class ConfigurationSerializer(serializers.ModelSerializer):
 class ChatSerializer(serializers.ModelSerializer):
     prompt_text = serializers.ReadOnlyField(source='prompt.text', default="**No data yet**")
 
-    system_message_ro = SystemMessageSerializer(source="system_message", read_only=True)
-
     configuration_ro = ConfigurationSerializer(source="configuration", read_only=True)
 
     class Meta:
         model = Chat
         fields = ['id', 'configuration', 'configuration_ro', 'system_message',
-                  'system_message_ro', 'prompt_text', 'human', 'date_time']
+                  'prompt_text', 'human', 'date_time']
 
     def update(self, instance, validated_data):
         # todo: consider other approaches
-        validated_data.pop('system_message')
-        validated_data.pop('configuration')
+        if 'configuration' in validated_data:
+            validated_data.pop('configuration')
         return super().update(instance, validated_data)
 
 

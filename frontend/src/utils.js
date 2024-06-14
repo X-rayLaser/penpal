@@ -458,7 +458,9 @@ let rawTemplateSpec = {
     question: "%message\n",
     answer: "%message\n",
     systemMessage: null,
-    startOfText: ""
+    startOfText: "",
+    promptSuffix: "",
+    continuationPrefix: ""
 };
 
 

@@ -75,8 +75,8 @@ class Configuration(models.Model):
 class Chat(models.Model):
     configuration = models.ForeignKey(Configuration, related_name='chats',
                                       blank=True, null=True, on_delete=models.SET_NULL)
-    system_message = models.ForeignKey(SystemMessage, related_name='chats',
-                                       blank=True, null=True, on_delete=models.SET_NULL)
+    system_message = models.CharField(max_length=4096, blank=True, null=True)
+
     prompt = models.OneToOneField('Message', related_name='chat', on_delete=models.SET_NULL,
                                   blank=True, null=True)
     human = models.ForeignKey(User, related_name='chats', blank=True, null=True,

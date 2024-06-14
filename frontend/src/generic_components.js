@@ -241,7 +241,7 @@ class GenericFetchJson {
             }
         };
 
-        if (this.method === 'POST') {
+        if (this.method === 'POST' || this.method === 'PATCH') {
             let binary = this.body.constructor.name === 'Blob' ? true : false;
             if (binary) {
                 requestParams.headers["Content-Type"] = "application/octet-stream";

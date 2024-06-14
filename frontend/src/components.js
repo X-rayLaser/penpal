@@ -4,7 +4,7 @@ import Form from 'react-bootstrap/Form';
 
 
 function CollapsibleSystemMessage(props) {
-    let sysMessage = (props.systemMessage && props.systemMessage.text) || "";
+    let sysMessage = props.systemMessage || "";
     return (
         <div>
             <Accordion>
@@ -19,7 +19,7 @@ function CollapsibleSystemMessage(props) {
 
 
 function CollapsibleEditableSystemMessage(props) {
-    let sysMessage = (props.systemMessage && props.systemMessage.text) || "";
+    let sysMessage = props.systemMessage || "";
     return (
         <div>
             <Accordion>

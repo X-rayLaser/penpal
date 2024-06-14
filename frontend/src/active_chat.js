@@ -239,7 +239,7 @@ class ActiveChat extends React.Component {
         super(props);
         this.state = {
             prompt: "",
-            system_message: null,
+            system_message: "",
             configuration: null,
             chatTree: {
                 children: []
@@ -319,15 +319,16 @@ class ActiveChat extends React.Component {
 
             let config = data.configuration_ro;
             let tools = (config && config.tools) || [];
+            let system_message = data.system_message || (config && config.system_message_ro && config.system_message_ro.text) || "";
 
             this.setState({
-                system_message: config.system_message_ro,
+                system_message,
                 configuration: config,
                 tools
             });
 
             let preset = config.preset_ro;
-            console.log("preset:", preset, "data", data, "sys message", config.system_message_ro);
+            console.log("preset:", preset, "data", data, "sys message", system_message);
             if (preset) {
                 this.setState({
                     temperature: preset.temperature,
@@ -477,6 +478,16 @@ class ActiveChat extends React.Component {
             launch_params: this.state.configuration.launch_params
         };
 
+        //saving system_message to db
+        const id = this.props.router.params.id;
+        const url = `/chats/chats/${id}/`;
+        const fetcher = new GenericFetchJson();
+        fetcher.method = "PATCH";
+        fetcher.body = {
+            system_message: this.state.system_message
+        };
+        fetcher.performFetch(url);
+
         let committedText = "";
         
         let streamer = new WebsocketResponseStreamer('/chats/generate_reply/', 'POST', this.props.websocket);
@@ -556,7 +567,7 @@ class ActiveChat extends React.Component {
     }
 
     preparePromptWithRecreatedConversation() {
-        let sysMessageText = (this.state.system_message && this.state.system_message.text) || "";
+        let sysMessageText = this.state.system_message;
 
         let toolText = this.state.toolText;
         if (toolText) {
@@ -642,18 +653,7 @@ class ActiveChat extends React.Component {
     }
 
     handleSystemMessageChanged(e) {
-        let newMessage;
-        if (this.state.system_message) {
-            newMessage = JSON.parse(JSON.stringify(this.state.system_message));
-        } else {
-            newMessage = {
-                name: ""
-            }
-        }
-
-        newMessage.text = e.target.value;
-
-        this.setState({ system_message: newMessage });
+        this.setState({ system_message: e.target.value });
     }
 
     render() {
