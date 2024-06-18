@@ -164,6 +164,12 @@ class Message extends React.Component {
                             Your browser does not support the audio element.
                         </audio>
                     )}
+
+                    {message.data.image && (
+                        <div className="mt-3">
+                            <img src={message.data.image} alt="User uploaded image" style={{ height: '200px'}} />
+                        </div>
+                    )}
                 </Card.Body>
                 <Card.Footer>
                     <div>
@@ -263,7 +269,9 @@ class ActiveChat extends React.Component {
             toolText: "",
             tools: [],
             submissionErrors: [],
-            generationError: ""
+            generationError: "",
+
+            imageUri: ""
         };
 
         this.handleInput = this.handleInput.bind(this);
@@ -283,7 +291,7 @@ class ActiveChat extends React.Component {
         this.handleMaxTokensChange = this.handleMaxTokensChange.bind(this);
         this.handleRepeatPenaltyChange = this.handleRepeatPenaltyChange.bind(this);
         this.handleSystemMessageChanged = this.handleSystemMessageChanged.bind(this);
-
+        this.handleImageUpload = this.handleImageUpload.bind(this);
     }
 
     componentDidMount() {
@@ -377,7 +385,7 @@ class ActiveChat extends React.Component {
 
         let leafId = leaf.id || null;
         this.setState({ inProgress: true });
-        let promise = this.postText(this.state.prompt, leafId, chatId);
+        let promise = this.postMessage(this.state.prompt, leafId, chatId, this.state.imageUri);
 
         promise.then(message => {
             this.setState(prevState => {
@@ -392,6 +400,7 @@ class ActiveChat extends React.Component {
                 return {
                     inProgress: true,
                     completion: "",
+                    imageUri: "",
                     chatTree: res.tree,
                     treePath: res.thread,
                     submissionErrors: []
@@ -411,7 +420,7 @@ class ActiveChat extends React.Component {
         });
     }
 
-    postText(text, parent, chatId) {
+    postMessage(text, parent, chatId, imageDataUri) {
         let data = {
             text,
             parent
@@ -419,6 +428,10 @@ class ActiveChat extends React.Component {
 
         if (chatId) {
             data["chat"] = chatId;
+        }
+
+        if (imageDataUri) {
+            data["image_data_uri"] = imageDataUri;
         }
 
         let fetcher = new GenericFetchJson();
@@ -514,7 +527,7 @@ class ActiveChat extends React.Component {
         let newMessagePromise = completionGenerator.generate(prompt).then(() => {
             let generatedText = this.state.completion;
             bufferingPlayer.calculateBufferSize(generatedText);
-            return this.postText(generatedText, leaf.id);
+            return this.postMessage(generatedText, leaf.id);
         });
 
         Promise.all([speechPromise, newMessagePromise]).then((values) => {
@@ -656,6 +669,10 @@ class ActiveChat extends React.Component {
         this.setState({ system_message: e.target.value });
     }
 
+    handleImageUpload(dataUri) {
+        this.setState({ imageUri: dataUri });
+    }
+
     render() {
         let radio = <ModeSelectionForm 
                         onRawMode={this.handleRawModeSwitch}
@@ -743,7 +760,9 @@ class ActiveChat extends React.Component {
                 <VoiceDictationTextareaForm submissionErrors={this.state.submissionErrors}
                     onSubmit={this.handleSubmitPrompt}
                     onTextChange={this.handleInput}
+                    onImageUpload={this.handleImageUpload}
                     text={this.state.prompt}
+                    imageUri={this.state.imageUri}
                     inProgress={this.state.inProgress} />
             </div>
         );
@@ -766,6 +785,7 @@ class VoiceDictationTextareaForm extends React.Component {
         this.stopRecording = this.stopRecording.bind(this);
 
         this.handleInput = this.handleInput.bind(this);
+        this.handleUploadedImage = this.handleUploadedImage.bind(this);
 
         this.mediaRecorder = null;
         this.voice = [];
@@ -777,6 +797,21 @@ class VoiceDictationTextareaForm extends React.Component {
     
     handleInput(e) {
         this.props.onTextChange(e.target.value);
+    }
+
+    handleUploadedImage(e) {
+        const fileList = e.target.files;
+        if (fileList.length === 0) {
+            return;
+        }
+
+        const file = fileList[0];
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            let imageUri = e.target.result;
+            this.props.onImageUpload(imageUri);
+        };
+        reader.readAsDataURL(file);
     }
 
     startRecording() {
@@ -845,6 +880,7 @@ class VoiceDictationTextareaForm extends React.Component {
         this.mediaRecorder.stop();
         this.setState({ recording: false });
     }
+
     render() {
         let busy = this.state.recording || this.state.processing;
         let submissionErrorsAlerts = this.props.submissionErrors.map((error, index) =>
@@ -908,6 +944,13 @@ class VoiceDictationTextareaForm extends React.Component {
                         <div className="mt-3">{submissionErrorsAlerts}</div>
                     }
                 </Form.Group>
+                <Form.Group controlId="imageFile" className="mb-3">
+                    <Form.Label>Upload image</Form.Label>
+                    <Form.Control type="file" onChange={this.handleUploadedImage} />
+                </Form.Group>
+                <div className="mb-3">
+                    {this.props.imageUri && <img src={this.props.imageUri} style={{ height: '200px'}} />}
+                </div>
                 {button}
             </Form>
         );

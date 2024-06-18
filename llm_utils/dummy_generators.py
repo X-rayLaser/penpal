@@ -4,7 +4,7 @@ from .base import TokenGenerator
 
 
 class DummyGenerator(TokenGenerator):
-    def stream_tokens(self, prompt, inference_config=None, clear_context=False, llm_settings=None):
+    def stream_tokens(self, generation_spec):
         words = ["likes", "words", "and", "everyone", "playing", "with"]
 
         for i in range(10):
@@ -16,7 +16,7 @@ class DummyGenerator(TokenGenerator):
 
 
 class DummyPhraseGenerator(TokenGenerator):
-    def stream_tokens(self, prompt, inference_config=None, clear_context=False, llm_settings=None):
+    def stream_tokens(self, generation_spec):
         words = ["The", "quick", "brown", "fox", "jumps", "over", "the", "lazy", "dog", "."]
 
         for word in words:
@@ -31,7 +31,7 @@ class DummyPhraseGenerator(TokenGenerator):
 
 
 class DummyMarkdownGenerator(TokenGenerator):
-    def stream_tokens(self, prompt, inference_config=None, clear_context=False, llm_settings=None):
+    def stream_tokens(self, generation_spec):
         tokens = ["Of", " ", "course", ".", " ", "Here" " ", "is", " ", "the", " ", "code", ":", "\n", 
                   "``", "`", "python", "\n", "for", " ", "i", " in", " ", "range", "(", "5", ")", 
                   ":", "\n", "    ", "print", "(", "'", "hello", " ", "world", "'", ")", "\n", "```"]
@@ -41,7 +41,7 @@ class DummyMarkdownGenerator(TokenGenerator):
 
 
 class DummyToolUseGenerator(TokenGenerator):
-    def stream_tokens(self, prompt, inference_config=None, clear_context=False, llm_settings=None):
+    def stream_tokens(self, generation_spec):
         tokens1 = ["one ", "two ", "three ", "<", "api>", "calculator", 
                   "(+,", "2,3)", "</api>", " rest", " to be ", "discarded "]
         tokens2 = ["four", "five", "six"]
@@ -53,6 +53,6 @@ class DummyToolUseGenerator(TokenGenerator):
 
 
 class DummyExceptionRaisingGenerator(TokenGenerator):
-    def stream_tokens(self, prompt, inference_config=None, clear_context=False, llm_settings=None):
+    def stream_tokens(self, generation_spec):
         yield 5 / 0
         yield "hey"

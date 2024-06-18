@@ -59,7 +59,8 @@ class Consumer(threading.Thread):
 
 
 @shared_task
-def generate_llm_response(prompt, inference_config, clear_context, llm_settings, socket_session_id):
+def generate_llm_response(generation_spec_dict, socket_session_id):
+    generation_spec = llm_utils.GenerationSpec(**generation_spec_dict)
     token_channel = f'{TOKEN_STREAM}:{socket_session_id}'
 
     queue = Queue()
@@ -69,7 +70,7 @@ def generate_llm_response(prompt, inference_config, clear_context, llm_settings,
     consumer.start()
 
     sentence = ''
-    for token in llm_utils.stream_tokens(prompt, inference_config, clear_context, llm_settings):
+    for token in llm_utils.stream_tokens(generation_spec):
         sentence += token
         r.publish(token_channel, token)
 

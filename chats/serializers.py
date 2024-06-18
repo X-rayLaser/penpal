@@ -68,7 +68,7 @@ class MessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = Message
         fields = ['id', 'text', 'clean_text', 'html', 'date_time',
-                  'generation_details', 'parent', 'replies', 'chat', 'audio']
+                  'generation_details', 'parent', 'replies', 'chat', 'audio', 'image']
         read_only_fields = ['replies', 'audio']
 
     def get_clean_text(self, obj):
@@ -104,7 +104,7 @@ class TreebankSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Message
-        fields = ['id', 'text', 'date_time', 'generation_details', 'parent', 'replies', 'chat']
+        fields = ['id', 'text', 'date_time', 'generation_details', 'parent', 'replies', 'chat', 'image']
         read_only_fields = ['replies', 'chat']
 
     def get_replies(self, obj):

@@ -396,9 +396,12 @@ class NewConfigurationForm extends React.Component {
             name: "",
             selectedRepo: "",
             selectedModelFile: "",
+            selectedMMprojectorRepo: "",
+            selectedMMprojectorModelFile: "",
             launchConfig: ModelLaunchConfig.defaultLaunchParams,
             repos: [],
             modelFiles: [],
+            projectorFiles: [],
             installedModels: {}, // repository -> model_file mapping
             systemMessages: [],
             selectedMessageName: "",
@@ -423,6 +426,9 @@ class NewConfigurationForm extends React.Component {
         this.handleLaunchConfChanged = this.handleLaunchConfChanged.bind(this);
         this.handleCheck = this.handleCheck.bind(this);
         this.handleTemplateInput = this.handleTemplateInput.bind(this);
+
+        this.handleProjectorRepoChange = this.handleProjectorRepoChange.bind(this);
+        this.handleProjectorModelChange = this.handleProjectorModelChange.bind(this);
     }
 
     componentDidMount() {
@@ -512,6 +518,28 @@ class NewConfigurationForm extends React.Component {
     }
 
     handleModelRepoChange(selectedRepo) {
+        let selection = this.updateSelectionFields(selectedRepo);
+        this.setState({
+            selectedRepo,
+            modelFiles: selection.modelFiles,
+            selectedModelFile: selection.selectedModelFile
+        });
+    }
+
+    handleProjectorRepoChange(selectedRepo) {
+        let selection = this.updateSelectionFields(selectedRepo);
+        this.setState({
+            selectedMMprojectorRepo: selectedRepo,
+            projectorFiles: selection.modelFiles,
+            selectedMMprojectorModelFile: selection.selectedModelFile
+        });
+    }
+
+    handleProjectorModelChange(selectedModelFile) {
+        this.setState({ selectedMMprojectorModelFile: selectedModelFile });
+    }
+
+    updateSelectionFields(selectedRepo) {
         let modelFiles = [];
         let selectedModelFile = "";
         if (this.state.installedModels.hasOwnProperty(selectedRepo)) {
@@ -521,7 +549,11 @@ class NewConfigurationForm extends React.Component {
         if (modelFiles.length > 0) {
             selectedModelFile = modelFiles[0].file_name;
         }
-        this.setState({ selectedRepo, modelFiles, selectedModelFile });
+
+        return {
+            modelFiles,
+            selectedModelFile
+        };
     }
 
     handleModelFileChange(selectedModelFile) {
@@ -553,6 +585,10 @@ class NewConfigurationForm extends React.Component {
     handleSubmit(e) {
         e.preventDefault();
         let preset = this.state.nameToPreset[this.state.selectedPresetName];
+
+        if (this.state.selectedMMprojectorModelFile) {
+            this.state.launchConfig['mmprojector'] = this.state.selectedMMprojectorModelFile;
+        }
 
         let data = {
             name: this.state.name,
@@ -641,6 +677,22 @@ class NewConfigurationForm extends React.Component {
                         items={this.state.modelFiles}
                         selectedName={this.state.selectedModelFile}
                         onChange={this.handleModelFileChange} 
+                    />
+                </div>
+
+                <div className="mb-3">
+                    <RepositorySelectionWidget
+                        items={["", ...this.state.repos]}
+                        selectedName={this.state.selectedMMprojectorRepo}
+                        onChange={this.handleProjectorRepoChange}
+                    />
+                </div>
+
+                <div className="mb-3">
+                    <ModelSelectionWidget
+                        items={this.state.projectorFiles}
+                        selectedName={this.state.selectedMMprojectorModelFile}
+                        onChange={this.handleProjectorModelChange}
                     />
                 </div>
 

@@ -1,7 +1,22 @@
+from dataclasses import dataclass
+
+
 class TokenGenerator:
-    def stream_tokens(self, prompt, inference_config=None, clear_context=False, llm_settings=None):
+    def stream_tokens(self, generation_spec):
         raise NotImplementedError
 
 
 class GenerationError(Exception):
     pass
+
+
+@dataclass
+class GenerationSpec:
+    prompt: str
+    inference_config: dict
+    sampling_config: dict
+    clear_context: bool
+    image_b64: str = ''
+
+    def to_dict(self):
+        return self.__dict__

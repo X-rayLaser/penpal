@@ -2,6 +2,9 @@ import json
 import os
 import wave
 import uuid
+import base64
+import re
+import imghdr
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -50,7 +53,7 @@ class BinaryRenderer(BaseRenderer):
         view = renderer_context['view']
         with open(view.get_object().audio.path, 'rb') as f:
             return f.read()
-    
+
 
 class SystemMessageViewSet(viewsets.ModelViewSet):
     serializer_class = SystemMessageSerializer
@@ -83,11 +86,22 @@ def _generate_completion(request):
     llm_settings = body.get("llm_settings", {})
     clear_context = body.get("clear_context", False)
     socket_session_id = body.get("socketSessionId")
+    image_b64 = body.get("image_data_uri")
 
     if prompt:
         print("about to start streaming. Prompt:", prompt)
-        task = generate_llm_response.delay(prompt, inference_config, clear_context, llm_settings, socket_session_id)
-        return Response({'task_id': task.task_id})
+        image_data = base64.b64decode(image_b64) if image_b64 else None
+        
+        spec = llm_utils.GenerationSpec(
+            prompt=prompt,
+            inference_config=inference_config,
+            sampling_config=llm_settings,
+            clear_context=clear_context,
+            image_b64=image_data
+        )
+
+        celery_task = generate_llm_response.delay(spec.to_dict(), socket_session_id)
+        return Response({'task_id': celery_task.task_id})
 
     return Response({'errors': ["Expected 'prompt' field in json request body"]}, 
                     status=status.HTTP_400_BAD_REQUEST)
@@ -221,8 +235,22 @@ def message_list(request):
         messages = Message.objects.all()
         serializer = MessageSerializer(messages, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
-    
-    serializer = MessageSerializer(data=request.data)
+
+    if 'image_data_uri' in request.data:
+        image_b64 = request.data.pop('image_data_uri')
+        fmt, image_str = image_b64.split(';base64,')
+        extension = fmt.split('/')[-1]
+
+        image_data = base64.b64decode(image_str)
+
+        extension = extension or imghdr.what(None, h=image_data) or "jpg"
+        image = ContentFile(image_data, name=f'prompt_image.{extension}')
+    else:
+        image = None
+
+    data = {**request.data, 'image': image}
+    serializer = MessageSerializer(data=data)
+
     if serializer.is_valid():
         serializer.save()
         return Response(serializer.data, status=status.HTTP_201_CREATED)

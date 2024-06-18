@@ -7,3 +7,4 @@ music21
 celery
 websockets
 django-allauth
+olefile

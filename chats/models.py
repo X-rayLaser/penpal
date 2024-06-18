@@ -96,6 +96,8 @@ class Message(models.Model):
 
     audio = models.FileField(upload_to="uploads/audio", blank=True, null=True)
 
+    image = models.ImageField(upload_to="uploads/chat_images", blank=True, null=True)
+
     @property
     def human_produced(self):
         return self.generation_details is None

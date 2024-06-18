@@ -1,4 +1,5 @@
 import subprocess
+import base64
 import threading
 import requests
 import time
@@ -6,11 +7,78 @@ import json
 import os
 import shutil
 import sys
+from llama_cpp import Llama
+from llama_cpp.llama_chat_format import Llava15ChatHandler
 
 sys.path.insert(0, ".")
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from huggingface_hub import hf_hub_download
 from llm_services.common import models_root, models_registry
+
+
+def uri_from_image(image_b64_string):
+    return f"data:image/png;base64,{image_b64_string}"
+
+
+class LLaVaGenerator:
+    def __init__(self, model_path, launch_config):
+        mmprojector_path = launch_config['mmprojector']
+        chat_handler = Llava15ChatHandler(clip_model_path=mmprojector_path)
+
+        context_size = self.launch_config.get('contextSize', 4096)
+        num_gpu_layers = self.launch_config.get('ngl', 0)
+        num_threads = self.launch_config.get('numThreads', 2)
+        num_batch_threads = self.launch_config.get('numBatchThreads', num_threads)
+        batch_size = self.launch_config.get('batchSize', 512)
+
+        image_b64_string = launch_config.get('image_b64')
+
+        self.n_predict = self.launch_config.get('nPredict', -1)
+        self.image_b64_string = image_b64_string and image_b64_string.decode()
+
+        self.llm = Llama(
+            model_path=model_path,
+            chat_handler=chat_handler,
+            n_ctx=context_size,
+            n_gpu_layers=num_gpu_layers,
+            n_threads=num_threads,
+            n_threads_batch=num_batch_threads,
+            n_batch=batch_size
+        )
+
+    def __call__(self, messages):
+        if len(messages) < 2:
+            yield ""
+        
+        system_msg = messages[0]
+        first_user_msg = messages[1]
+        empty_user_msg = {"type" : "text", "text": ""}
+
+        if self.image_b64_string and "content" in first_user_msg["content"]:
+            #uri = uri_from_image(self.image_b64_string)
+            uri = self.image_b64_string
+            first_user_msg["content"] = [
+                {"type": "image_url", "image_url": {"url": uri }},
+                first_user_msg["content"][0] or empty_user_msg
+            ]
+
+        it = self.llm.create_chat_completion(messages, max_tokens=self.n_predict, stream=True)
+
+        def prepare_json_line(text, stop=False):
+            special_prefix = "_" * 6 # because client strips 6 first characters
+            res = special_prefix + json.dumps({"content": text, "stop": stop, "stopping_word": ""}) + '\n'
+            return res
+
+        for chunk in it:
+            print(chunk)
+            choices = chunk.get("choices")
+            if not (choices and choices[0]):
+                continue
+
+            s = choices[0].get("text")
+            if s:
+                yield prepare_json_line(s)
+        yield prepare_json_line("", stop=True)
 
 
 class LLMManager:
@@ -22,12 +90,15 @@ class LLMManager:
 
         self.model_path = ""
         self.launch_config = {}
+        self.llava = False
 
         self.process = None
         self.printing_thread = None
 
         self.download_threads = []
         self.downloads = {}
+
+        self.llava_generator = None
 
     def setup(self, exec_path, host, port):
         self.executable_path = exec_path
@@ -37,8 +108,16 @@ class LLMManager:
     def configure_launch(self, model_path, launch_config):
         self.model_path = model_path
         self.launch_config = launch_config
+        self.llava = 'mmprojector' in self.launch_config
+
+        if self.llava:
+            self.llava_generator = LLaVaGenerator(model_path, launch_config)
 
     def generate(self, data, content_type):
+        if self.llava:
+            messages = data.get('messages', [])
+            yield from self.llava_generator(messages)
+            return
         if self.process is None:
             self.restart_llm()
 
@@ -62,6 +141,9 @@ class LLMManager:
     def restart_llm(self):
         if not self.model_path:
             raise Exception('Improperfly configured: no model path set')
+
+        if self.llava:
+            return
 
         context_size = self.launch_config.get('contextSize', 512)
         num_gpu_layers = self.launch_config.get('ngl', 0)

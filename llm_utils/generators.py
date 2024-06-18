@@ -25,9 +25,10 @@ class RemoteLLM(TokenGenerator):
         self.proxies = proxies or {}
         self.request_maker = RequestMaker(proxies)
 
-    def stream_tokens(self, prompt, inference_config=None, clear_context=False, llm_settings=None):
-        llm_settings = llm_settings or {}
-        inference_config = inference_config or {}
+    def stream_tokens(self, generation_spec):
+        prompt = generation_spec.prompt
+        llm_settings = generation_spec.sampling_config or {}
+        inference_config = generation_spec.inference_config or {}
         clean_llm_settings(llm_settings)
 
         start_llm_url = f"http://{self.host}:{self.port}/start-llm"
@@ -43,7 +44,7 @@ class RemoteLLM(TokenGenerator):
         if resp.status_code != 200:
             raise PrepareModelError("Failed to configure and start model")
 
-        if clear_context:
+        if generation_spec.clear_context:
             url = f"http://{self.host}:{self.port}/clear-context"
             resp = self.request_maker.post(url)
             if resp.status_code != 200:
@@ -56,7 +57,6 @@ class RemoteLLM(TokenGenerator):
         payload = {"prompt": prompt, "stream": True, "stop": [stop_word], "cache_prompt": True}
         payload.update(llm_settings)
 
-        
         resp = self.request_maker.post(url, data=json.dumps(payload), headers=headers, stream=True)
         for line in resp.iter_lines(chunk_size=1):
             if line:
