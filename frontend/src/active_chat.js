@@ -606,6 +606,8 @@ class ActiveChat extends React.Component {
         let preparedMessages = messages.map((msg, index) => {
             let text = msg.data.text;
 
+            console.log("Preparing messages. Message: ", msg);
+
             if (index % 2 === 0) {
                 let content = [{
                     type: "text",

@@ -52,7 +52,8 @@ export function buildTree(root) {
 
 function fixBranch(node) {
     let fixedNode = new Node(node.id, { 
-        text: node.text, clean_text: node.clean_text, html: node.html, audio: node.audio, image: node.image
+        text: node.text, clean_text: node.clean_text, html: node.html, audio: node.audio,
+        image: node.image, image_b64: node.image_b64
     });
     for (let i = 0; i < node.replies.length; i++) {
         let fixedChild = fixBranch(node.replies[i]);
@@ -82,7 +83,8 @@ export function addNode(tree, nodeId, message) {
         clean_text: message.clean_text,
         html: message.html,
         audio: message.audio,
-        image: message.image
+        image: message.image,
+        image_b64: message.image_b64
     };
 
     let childNode = new Node(message.id, data);
@@ -101,7 +103,8 @@ function addNodeUnderRoot(tree, message) {
         clean_text: message.clean_text,
         html: message.html,
         audio: message.audio,
-        image: message.image
+        image: message.image,
+        image_b64: message.image_b64
     };
     let childNode = new Node(message.id, data);
     treeCopy.addChild(childNode);

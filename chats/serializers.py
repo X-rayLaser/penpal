@@ -1,4 +1,6 @@
 import re
+import base64
+import os
 import markdown
 from rest_framework import serializers
 from .models import SystemMessage, Preset, Configuration, Chat, Message, SpeechSample
@@ -62,13 +64,15 @@ class ChatSerializer(serializers.ModelSerializer):
 
 class MessageSerializer(serializers.ModelSerializer):
     chat = serializers.PrimaryKeyRelatedField(many=False, required=False, queryset=Chat.objects.all())
-    html = serializers.SerializerMethodField()
+
     clean_text = serializers.SerializerMethodField()
+    html = serializers.SerializerMethodField()
+    image_b64 = serializers.SerializerMethodField()
     
     class Meta:
         model = Message
         fields = ['id', 'text', 'clean_text', 'html', 'date_time',
-                  'generation_details', 'parent', 'replies', 'chat', 'audio', 'image']
+                  'generation_details', 'parent', 'replies', 'chat', 'audio', 'image', 'image_b64']
         read_only_fields = ['replies', 'audio']
 
     def get_clean_text(self, obj):
@@ -88,6 +92,9 @@ class MessageSerializer(serializers.ModelSerializer):
     def get_html(self, obj):
         return markdown.markdown(self.get_clean_text(obj), extensions=['fenced_code'])
 
+    def get_image_b64(self, obj):
+        return to_data_uri(obj.image)
+
     def create(self, validated_data):
         print(validated_data)
         obj = super().create(validated_data)
@@ -101,10 +108,11 @@ class MessageSerializer(serializers.ModelSerializer):
 
 class TreebankSerializer(serializers.ModelSerializer):
     replies = serializers.SerializerMethodField()
-
+    image_b64 = serializers.SerializerMethodField()
+    
     class Meta:
         model = Message
-        fields = ['id', 'text', 'date_time', 'generation_details', 'parent', 'replies', 'chat', 'image']
+        fields = ['id', 'text', 'date_time', 'generation_details', 'parent', 'replies', 'chat', 'image', 'image_b64']
         read_only_fields = ['replies', 'chat']
 
     def get_replies(self, obj):
@@ -115,3 +123,19 @@ class TreebankSerializer(serializers.ModelSerializer):
             res.append(item)
     
         return res
+
+    def get_image_b64(self, obj):
+        return to_data_uri(obj.image)
+
+
+def to_data_uri(image):
+    if not image:
+        return None
+
+    with open(image.path, "rb") as f:
+        data = f.read()
+
+    _, extension = os.path.splitext(image.path)
+    extension = extension[1:]
+    image_b64_string = base64.b64encode(data).decode('utf-8')
+    return f"data:image/{extension};base64,{image_b64_string}"

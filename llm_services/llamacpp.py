@@ -22,9 +22,11 @@ def uri_from_image(image_b64_string):
 
 class LLaVaGenerator:
     def __init__(self, model_path, launch_config):
-        mmprojector_path = launch_config['mmprojector']
+        mmprojector_file = launch_config['mmprojector']
+        mmprojector_path = os.path.join(models_root, mmprojector_file)
         chat_handler = Llava15ChatHandler(clip_model_path=mmprojector_path)
 
+        self.launch_config = launch_config
         context_size = self.launch_config.get('contextSize', 4096)
         num_gpu_layers = self.launch_config.get('ngl', 0)
         num_threads = self.launch_config.get('numThreads', 2)
@@ -63,11 +65,11 @@ class LLaVaGenerator:
             if not (choices and choices[0]):
                 continue
 
-            message = choices[0].get("message")
-            if not message:
+            delta = choices[0].get("delta")
+            if not delta:
                 continue
 
-            s = message.get('content')
+            s = delta.get('content')
             if s:
                 yield prepare_json_line(s)
         yield prepare_json_line("", stop=True)
@@ -107,7 +109,8 @@ class LLMManager:
 
     def generate(self, data, content_type):
         if self.llava:
-            messages = data.get('prompt', [])
+            params = json.loads(data)
+            messages = params.get('prompt', [])
             yield from self.llava_generator(messages)
             return
         if self.process is None:
@@ -311,7 +314,7 @@ class HttpHandler(BaseHTTPRequestHandler):
         json_data = self.rfile.read(content_len)
         json_data = json_data.decode("utf-8")
         print("Got content type", content_type)
-        print("Got data", json_data)
+        print("Got data", json_data[:100])
 
         self.send_response(200)
         self.send_header("Content-type", "text/html")
