@@ -34,7 +34,7 @@ class LLaVaGenerator:
         image_b64_string = launch_config.get('image_b64')
 
         self.n_predict = self.launch_config.get('nPredict', -1)
-        self.image_b64_string = image_b64_string and image_b64_string.decode()
+        self.image_b64_string = image_b64_string and image_b64_string.decode('utf-8')
 
         self.llm = Llama(
             model_path=model_path,
@@ -49,18 +49,6 @@ class LLaVaGenerator:
     def __call__(self, messages):
         if len(messages) < 2:
             yield ""
-        
-        system_msg = messages[0]
-        first_user_msg = messages[1]
-        empty_user_msg = {"type" : "text", "text": ""}
-
-        if self.image_b64_string and "content" in first_user_msg["content"]:
-            #uri = uri_from_image(self.image_b64_string)
-            uri = self.image_b64_string
-            first_user_msg["content"] = [
-                {"type": "image_url", "image_url": {"url": uri }},
-                first_user_msg["content"][0] or empty_user_msg
-            ]
 
         it = self.llm.create_chat_completion(messages, max_tokens=self.n_predict, stream=True)
 
@@ -75,7 +63,11 @@ class LLaVaGenerator:
             if not (choices and choices[0]):
                 continue
 
-            s = choices[0].get("text")
+            message = choices[0].get("message")
+            if not message:
+                continue
+
+            s = message.get('content')
             if s:
                 yield prepare_json_line(s)
         yield prepare_json_line("", stop=True)
@@ -115,7 +107,7 @@ class LLMManager:
 
     def generate(self, data, content_type):
         if self.llava:
-            messages = data.get('messages', [])
+            messages = data.get('prompt', [])
             yield from self.llava_generator(messages)
             return
         if self.process is None:

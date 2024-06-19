@@ -8,7 +8,7 @@ import Alert from 'react-bootstrap/Alert';
 import ButtonGroup from 'react-bootstrap/ButtonGroup';
 import Badge from 'react-bootstrap/Badge';
 import { withRouter, guessChatEncoder, ChatEncoder, 
-    WebsocketResponseStreamer, TextCompletionGenerator,
+    WebsocketResponseStreamer, SimpleTextCompletionGenerator, ToolAugmentedCompletionGenerator,
     BufferringAudioAutoPlayer, captureAndPlaySpeech
 } from "./utils";
 import { 
@@ -467,15 +467,6 @@ class ActiveChat extends React.Component {
     generateData() {
         let leaf = traverseTree(this.state.chatTree, this.state.treePath);
 
-        //let prompt = this.preparePrompt(leaf);
-        let obj = this.preparePromptWithRecreatedConversation();
-        let prompt = obj.prompt;
-        let chatEncoder = obj.chatEncoder;
-
-        console.log(`sys message: ${this.state.system_message}`)
-        console.log("full prompt!!!:")
-        console.log(prompt);
-
         let llmSettings = {
             temperature: this.state.temperature,
             top_k: this.state.top_k,
@@ -504,9 +495,28 @@ class ActiveChat extends React.Component {
         let committedText = "";
         
         let streamer = new WebsocketResponseStreamer('/chats/generate_reply/', 'POST', this.props.websocket);
-        let completionGenerator = new TextCompletionGenerator(
-            inferenceConfig, llmSettings, streamer, this.props.socketSessionId, chatEncoder.spec
-        );
+        let completionGenerator;
+
+        let prompt;
+
+        if (inferenceConfig.launch_params.hasOwnProperty("mmprojector")) {
+            prompt = this.prepareMessages();
+
+            completionGenerator = new SimpleTextCompletionGenerator(
+                inferenceConfig, llmSettings, streamer, this.props.socketSessionId
+            );
+        } else {
+            let obj = this.preparePromptWithRecreatedConversation();
+            prompt = obj.prompt;
+
+            let chatEncoder = obj.chatEncoder;
+            completionGenerator = new ToolAugmentedCompletionGenerator(
+                inferenceConfig, llmSettings, streamer, this.props.socketSessionId, chatEncoder.spec
+            );
+        }
+
+        console.log("full prompt!!!:")
+        console.log(prompt);
 
         completionGenerator.onChunk = (generatedText, chunk) => {
             this.setState(prevState => ({
@@ -577,6 +587,51 @@ class ActiveChat extends React.Component {
         } else {
             return this.preparePromptWithRecreatedConversation();
         }
+    }
+
+    prepareMessages() {
+        let sysMessageText = this.state.system_message;
+
+        let toolText = this.state.toolText;
+        if (toolText) {
+            sysMessageText += toolText;
+        }
+
+        let messages = getThreadMessages(this.state.chatTree, this.state.treePath);
+        let systemMessage = {
+            role: "system",
+            content: sysMessageText
+        };
+        
+        let preparedMessages = messages.map((msg, index) => {
+            let text = msg.data.text;
+
+            if (index % 2 === 0) {
+                let content = [{
+                    type: "text",
+                    text
+                }];
+
+                if (msg.data.image_b64) {
+                    content.push({
+                        type: "image_url",
+                        image_url: { url: msg.data.image_b64 }
+                    });
+                }
+
+                return {
+                    role: "user",
+                    content
+                };
+            } else {
+                return {
+                    role: "assistant",
+                    content: [{ type: "text", text }]
+                }
+            }
+        });
+
+        return [systemMessage, ...preparedMessages];
     }
 
     preparePromptWithRecreatedConversation() {

@@ -21,19 +21,55 @@ export const withRouter = WrappedComponent => props => {
     );
 };
 
-export class TextCompletionGenerator {
-    constructor(inferenceConfig, llmSettings, tokenStreamer, socketSessionId, chatTemplate) {
+
+export class SimpleTextCompletionGenerator {
+    constructor(inferenceConfig, llmSettings, tokenStreamer, socketSessionId) {
         this.inferenceConfig = inferenceConfig;
         this.llmSettings = llmSettings;
         this.onChunk = chunk => {};
         this.onPaused = textSegment => {};
         this.streamer = tokenStreamer;
         this.socketSessionId = socketSessionId;
-        this.chatTemplate = chatTemplate;
 
         if (!this.streamer) {
             this.streamer = new JsonResponseStreamer('/chats/generate_reply/', 'POST');
         }
+    }
+
+    generate(messages) {
+        return new Promise((resolve, reject) => {
+            let generatedText = "";
+            let body = this.prepareBody(messages);
+
+            this.streamer.onChunk = chunk => {
+                generatedText += chunk;
+                this.onChunk(generatedText, chunk);
+            };
+
+            this.streamer.stream(body).then(() => {
+                resolve(generatedText);
+            }).catch(reason => {
+                console.error(reason);
+                reject(reason.error);
+            });
+        });
+    }
+
+    prepareBody(prompt) {
+        return {
+            prompt,
+            inference_config: this.inferenceConfig,
+            clear_context: true,
+            llm_settings: this.llmSettings,
+            socketSessionId: this.socketSessionId
+        };
+    }
+}
+
+export class ToolAugmentedCompletionGenerator extends SimpleTextCompletionGenerator {
+    constructor(inferenceConfig, llmSettings, tokenStreamer, socketSessionId, chatTemplate) {
+        super(inferenceConfig, llmSettings, tokenStreamer, socketSessionId);
+        this.chatTemplate = chatTemplate;
     }
 
     generate(prompt) {
@@ -75,16 +111,6 @@ export class TextCompletionGenerator {
         });
     }
 
-    prepareBody(prompt) {
-        return {
-            prompt,
-            inference_config: this.inferenceConfig,
-            clear_context: true,
-            llm_settings: this.llmSettings,
-            socketSessionId: this.socketSessionId
-        };
-    }
-
     makeApiCall(callInfo, generatedText) {
         let offset = callInfo.offset;
         let api_call = callInfo.api_call;
@@ -100,57 +126,6 @@ export class TextCompletionGenerator {
     }
 }
 
-
-class ApiCall {
-    constructor(name, argString, offset) {
-        this.name = name;
-        this.argString = argString;
-        this.offset = offset;
-    }
-
-    renderWithResult(result) {
-        return `<api>${this.name}(${this.argString})</api><result>${result}</result>`;
-    }
-
-    toUrlPath() {
-        // todo: urlencode this
-        let tool = this.name;
-        let argString = encodeURIComponent(this.argString);
-
-        return `/chats/call_api?tool=${tool}&arg_string=${argString}`;
-    }
-}
-
-function findPendingApiCall(generatedText) {
-    //returns first pending API call and its index, otherwise return null
-    generatedText = generatedText.toLowerCase();
-    let results = generatedText.match(/<api>[\s]*[a-z_]+\(.*<\/api>/);
-    if (!results || results.length === 0) {
-        return null;
-    }
-
-    let str = results[0];
-
-    let offset = generatedText.indexOf(str);
-
-    if (offset === -1) {
-        const msg = "Found api call markup, but for some reason failed to pinpoint its position"
-        console.error(msg);
-        throw new Error(msg);
-    }
-    str = str.replace("<api>", "").replace("</api>", "");
-    str = str.replace(/=.*/, "").trim();
-
-    let name = str.match(/^[a-z_]+/)[0];
-    let argString;
-    if (!str.endsWith(")")) {
-        str += ")";
-    }
-    argString = str.match(/\((.*)\)/)[1];
-
-    console.log("argString: ", argString)
-    return new ApiCall(name, argString, offset);
-}
 
 //deprecated
 export function streamJsonResponse(url, method, data, handleChunk, handleDone) {
