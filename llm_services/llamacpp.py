@@ -7,7 +7,7 @@ import json
 import os
 import shutil
 import sys
-from llama_cpp import Llama
+from llama_cpp import Llama, LlamaCache
 from llama_cpp.llama_chat_format import Llava15ChatHandler
 
 sys.path.insert(0, ".")
@@ -48,15 +48,28 @@ class LLaVaGenerator:
             n_batch=batch_size
         )
 
-    def __call__(self, messages):
+        self.cache = None
+
+    def enable_caching(self, params):
+        if 'cache_prompt' in params and self.cache is None:
+            self.cache = LlamaCache
+            self.llm.set_cache(self.cache)
+
+    def __call__(self, messages, params):
+        self.enable_caching(params)
+
         if len(messages) < 2:
             yield ""
 
-        it = self.llm.create_chat_completion(messages, max_tokens=self.n_predict, stream=True)
+        relevant_params = ['temperature', 'top_p', 'top_k', 'min_p', 'repeat_penalty', 'stop']
+        sampling_params = {name: params[name] for name in relevant_params if name in params}
+        sampling_params['max_tokens'] = params.get('n_predict', self.n_predict)
+
+        it = self.llm.create_chat_completion(messages, stream=True, **sampling_params)
 
         def prepare_json_line(text, stop=False):
-            special_prefix = "_" * 6 # because client strips 6 first characters
-            res = special_prefix + json.dumps({"content": text, "stop": stop, "stopping_word": ""}) + '\n'
+            padding = "_" * 6 # because client strips 6 first characters
+            res = padding + json.dumps({"content": text, "stop": stop, "stopping_word": ""}) + '\n'
             return res
 
         for chunk in it:
@@ -111,7 +124,7 @@ class LLMManager:
         if self.llava:
             params = json.loads(data)
             messages = params.get('prompt', [])
-            yield from self.llava_generator(messages)
+            yield from self.llava_generator(messages, params)
             return
         if self.process is None:
             self.restart_llm()
