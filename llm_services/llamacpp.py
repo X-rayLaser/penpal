@@ -52,7 +52,7 @@ class LLaVaGenerator:
 
     def enable_caching(self, params):
         if 'cache_prompt' in params and self.cache is None:
-            self.cache = LlamaCache
+            self.cache = LlamaCache()
             self.llm.set_cache(self.cache)
 
     def __call__(self, messages, params):
@@ -61,9 +61,14 @@ class LLaVaGenerator:
         if len(messages) < 2:
             yield ""
 
-        relevant_params = ['temperature', 'top_p', 'top_k', 'min_p', 'repeat_penalty', 'stop']
-        sampling_params = {name: params[name] for name in relevant_params if name in params}
-        sampling_params['max_tokens'] = params.get('n_predict', self.n_predict)
+        relevant_params = {'temperature': float, 'top_p': float, 'top_k': int, 'min_p': float, 'repeat_penalty': float, 'stop': str}
+        sampling_params = {name: converter(params[name]) for name, converter in relevant_params.items() if name in params}
+        sampling_params['max_tokens'] = int(params.get('n_predict', self.n_predict))
+        sampling_params.pop('stop')
+        print("Sampling params:", sampling_params)
+        sampling_params_ = {}
+        sampling_params_['temperature'] = sampling_params['temperature']
+        #sampling_params_['top_p'] = 
 
         it = self.llm.create_chat_completion(messages, stream=True, **sampling_params)
 
