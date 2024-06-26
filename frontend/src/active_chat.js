@@ -165,6 +165,10 @@ class Message extends React.Component {
                         </audio>
                     )}
 
+                    {message.data.attachments_text && (
+                        <div className="mt-3">{message.data.attachments_text}</div>
+                    )}
+
                     {message.data.image && (
                         <div className="mt-3">
                             <img src={message.data.image} alt="User uploaded image" style={{ height: '200px'}} />
@@ -271,7 +275,8 @@ class ActiveChat extends React.Component {
             submissionErrors: [],
             generationError: "",
 
-            imageUri: ""
+            imageUri: "",
+            attachments: []
         };
 
         this.handleInput = this.handleInput.bind(this);
@@ -292,6 +297,7 @@ class ActiveChat extends React.Component {
         this.handleRepeatPenaltyChange = this.handleRepeatPenaltyChange.bind(this);
         this.handleSystemMessageChanged = this.handleSystemMessageChanged.bind(this);
         this.handleImageUpload = this.handleImageUpload.bind(this);
+        this.handleDirectoryUpload = this.handleDirectoryUpload.bind(this);
     }
 
     componentDidMount() {
@@ -385,7 +391,8 @@ class ActiveChat extends React.Component {
 
         let leafId = leaf.id || null;
         this.setState({ inProgress: true });
-        let promise = this.postMessage(this.state.prompt, leafId, chatId, this.state.imageUri);
+        //let promise = this.postMessage(this.state.prompt, leafId, chatId, this.state.imageUri);
+        let promise = this.postUserMessage(this.state.prompt, leafId, chatId, this.state.imageUri, this.state.attachments);
 
         promise.then(message => {
             this.setState(prevState => {
@@ -401,6 +408,7 @@ class ActiveChat extends React.Component {
                     inProgress: true,
                     completion: "",
                     imageUri: "",
+                    attachments: [],
                     chatTree: res.tree,
                     treePath: res.thread,
                     submissionErrors: []
@@ -417,6 +425,42 @@ class ActiveChat extends React.Component {
             }
 
             this.setState({ submissionErrors });
+        });
+    }
+
+    postUserMessage(text, parent, chatId, imageDataUri, attachments) {
+        const formData = new FormData();
+        formData.append("text", text);
+
+        if (parent) {
+            formData.append("parent", parent);
+        }
+
+        if (chatId) {
+            formData.append("chat", chatId);
+        }
+
+        if (imageDataUri) {
+            formData.append("image_data_uri", imageDataUri);
+        }
+
+        if (attachments && attachments.length > 0) {
+            for (const file of attachments) {
+                let fileName = file.webkitRelativePath || file.name;
+                formData.append("attachments", file, fileName);
+            }
+        }
+
+        //handle errors gracefully
+        const params = {
+            method: "POST",
+            body: formData
+        };
+
+        return fetch('/chats/messages/', params).then(
+            response => response.json()
+        ).catch(reason => {
+            console.error(reason);
         });
     }
 
@@ -503,7 +547,7 @@ class ActiveChat extends React.Component {
             prompt = this.prepareMessages();
 
             completionGenerator = new SimpleTextCompletionGenerator(
-                inferenceConfig, llmSettings, streamer, this.props.socketSessionId
+                inferenceConfig, llmSettings, leaf.id, streamer, this.props.socketSessionId
             );
         } else {
             let obj = this.preparePromptWithRecreatedConversation();
@@ -511,7 +555,7 @@ class ActiveChat extends React.Component {
 
             let chatEncoder = obj.chatEncoder;
             completionGenerator = new ToolAugmentedCompletionGenerator(
-                inferenceConfig, llmSettings, streamer, this.props.socketSessionId, chatEncoder.spec
+                inferenceConfig, llmSettings, leaf.id, streamer, this.props.socketSessionId, chatEncoder.spec
             );
         }
 
@@ -730,6 +774,9 @@ class ActiveChat extends React.Component {
         this.setState({ imageUri: dataUri });
     }
 
+    handleDirectoryUpload(attachments) {
+        this.setState({ attachments });
+    }
     render() {
         let radio = <ModeSelectionForm 
                         onRawMode={this.handleRawModeSwitch}
@@ -818,6 +865,7 @@ class ActiveChat extends React.Component {
                     onSubmit={this.handleSubmitPrompt}
                     onTextChange={this.handleInput}
                     onImageUpload={this.handleImageUpload}
+                    onDirectoryUpload={this.handleDirectoryUpload}
                     text={this.state.prompt}
                     imageUri={this.state.imageUri}
                     inProgress={this.state.inProgress} />
@@ -843,6 +891,7 @@ class VoiceDictationTextareaForm extends React.Component {
 
         this.handleInput = this.handleInput.bind(this);
         this.handleUploadedImage = this.handleUploadedImage.bind(this);
+        this.handleDirectoryUpload = this.handleDirectoryUpload.bind(this);
 
         this.mediaRecorder = null;
         this.voice = [];
@@ -871,6 +920,10 @@ class VoiceDictationTextareaForm extends React.Component {
         reader.readAsDataURL(file);
     }
 
+    handleDirectoryUpload(e) {
+        console.log(e.target.files);
+        this.props.onDirectoryUpload(e.target.files);
+    }
     startRecording() {
         this.setState({ micError: "", recordingError: "", starting: true });
         this.voice = [];
@@ -1005,6 +1058,12 @@ class VoiceDictationTextareaForm extends React.Component {
                     <Form.Label>Upload image</Form.Label>
                     <Form.Control type="file" onChange={this.handleUploadedImage} />
                 </Form.Group>
+
+                <Form.Group controlId="documentDirectory" className="mb-3">
+                    <Form.Label>Upload document directory</Form.Label>
+                    <Form.Control type="file" onChange={this.handleDirectoryUpload} webkitdirectory="true" multiple  />
+                </Form.Group>
+
                 <div className="mb-3">
                     {this.props.imageUri && <img src={this.props.imageUri} style={{ height: '200px'}} />}
                 </div>

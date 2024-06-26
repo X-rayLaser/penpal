@@ -23,9 +23,10 @@ export const withRouter = WrappedComponent => props => {
 
 
 export class SimpleTextCompletionGenerator {
-    constructor(inferenceConfig, llmSettings, tokenStreamer, socketSessionId) {
+    constructor(inferenceConfig, llmSettings, leafId, tokenStreamer, socketSessionId) {
         this.inferenceConfig = inferenceConfig;
         this.llmSettings = llmSettings;
+        this.leafId = leafId;
         this.onChunk = chunk => {};
         this.onPaused = textSegment => {};
         this.streamer = tokenStreamer;
@@ -61,14 +62,15 @@ export class SimpleTextCompletionGenerator {
             inference_config: this.inferenceConfig,
             clear_context: true,
             llm_settings: this.llmSettings,
+            parent: this.leafId,
             socketSessionId: this.socketSessionId
         };
     }
 }
 
 export class ToolAugmentedCompletionGenerator extends SimpleTextCompletionGenerator {
-    constructor(inferenceConfig, llmSettings, tokenStreamer, socketSessionId, chatTemplate) {
-        super(inferenceConfig, llmSettings, tokenStreamer, socketSessionId);
+    constructor(inferenceConfig, llmSettings, leafId, tokenStreamer, socketSessionId, chatTemplate) {
+        super(inferenceConfig, llmSettings, leafId, tokenStreamer, socketSessionId);
         this.chatTemplate = chatTemplate;
     }
 

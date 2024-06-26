@@ -51,10 +51,9 @@ export function buildTree(root) {
 }
 
 function fixBranch(node) {
-    let fixedNode = new Node(node.id, { 
-        text: node.text, clean_text: node.clean_text, html: node.html, audio: node.audio,
-        image: node.image, image_b64: node.image_b64
-    });
+    let data = populateData(node);
+    let fixedNode = new Node(node.id, data);
+
     for (let i = 0; i < node.replies.length; i++) {
         let fixedChild = fixBranch(node.replies[i]);
         fixedNode.addChild(fixedChild);
@@ -75,17 +74,9 @@ export function fetchTree(url) {
 export function addNode(tree, nodeId, message) {
     //create new node and append it to the list of children of a node with nodeId
     let treeCopy = copyTree(tree);
-
     let parentNode = getNodeById(treeCopy, nodeId);
     //todo: consider to just pass message itself as data
-    let data = {
-        text: message.text,
-        clean_text: message.clean_text,
-        html: message.html,
-        audio: message.audio,
-        image: message.image,
-        image_b64: message.image_b64
-    };
+    let data = populateData(message);
 
     let childNode = new Node(message.id, data);
     parentNode.addChild(childNode);
@@ -97,21 +88,25 @@ export function addNode(tree, nodeId, message) {
 
 function addNodeUnderRoot(tree, message) {
     let treeCopy = copyTree(tree);
-
-    let data = {
-        text: message.text,
-        clean_text: message.clean_text,
-        html: message.html,
-        audio: message.audio,
-        image: message.image,
-        image_b64: message.image_b64
-    };
+    let data = populateData(message);
     let childNode = new Node(message.id, data);
+
     treeCopy.addChild(childNode);
     return {
         tree: treeCopy,
         node: childNode
     }
+}
+
+function populateData(obj) {
+    const keys = ["text", "clean_text", "html", "audio", "image", "image_b64", "attachments_text"];
+
+    let data = {};
+    for (let key of keys) {
+        data[key] = obj[key] || null;
+    }
+
+    return data;
 }
 
 export function addMessage(tree, thread, attachToId, message) {

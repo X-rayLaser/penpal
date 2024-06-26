@@ -98,6 +98,8 @@ class Message(models.Model):
 
     image = models.ImageField(upload_to="uploads/chat_images", blank=True, null=True)
 
+    attachments_text = models.TextField(max_length=100000, blank=True, null=True)
+
     @property
     def human_produced(self):
         return self.generation_details is None
@@ -116,6 +118,16 @@ class Message(models.Model):
             return []
         
         return self.parent.replies.all()
+
+
+class Attachment(models.Model):
+    original_name = models.CharField(max_length=512)
+    file = models.FileField(upload_to="uploads/attachments")
+
+    message = models.ForeignKey(Message, related_name='attachments', on_delete=models.CASCADE)
+
+    def __str__(self) -> str:
+        return self.original_name
 
 
 class SpeechSample(models.Model):

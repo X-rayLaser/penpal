@@ -88,6 +88,8 @@ def _generate_completion(request):
     socket_session_id = body.get("socketSessionId")
     image_b64 = body.get("image_data_uri")
 
+    parent_message_id = int(body.get("parent", -1))
+
     if prompt:
         print("about to start streaming. Prompt:", prompt)
         image_data = base64.b64decode(image_b64) if image_b64 else None
@@ -97,7 +99,8 @@ def _generate_completion(request):
             inference_config=inference_config,
             sampling_config=llm_settings,
             clear_context=clear_context,
-            image_b64=image_data
+            image_b64=image_data,
+            parent_message_id=parent_message_id
         )
 
         celery_task = generate_llm_response.delay(spec.to_dict(), socket_session_id)
@@ -248,7 +251,8 @@ def message_list(request):
     else:
         image = None
 
-    data = {**request.data, 'image': image}
+    data = request.data.copy()
+    data['image'] = image
     serializer = MessageSerializer(data=data)
 
     if serializer.is_valid():

@@ -2,12 +2,13 @@ import threading
 import time
 from queue import Queue
 import json
+import os
 from celery import shared_task
 import redis
 from django.core.files.base import ContentFile
 import llm_utils
 import tts
-from chats.models import SpeechSample
+from chats.models import SpeechSample, Message
 
 TOKEN_STREAM = 'token_stream'
 SPEECH_CHANNEL = 'speech_stream'
@@ -58,10 +59,109 @@ class Consumer(threading.Thread):
             self.queue.task_done()
 
 
+def parse_attachment(attachment):
+    print("parsing attachment")
+    name = attachment.original_name
+
+    # todo: support pdf, csv and other document files
+    content = ''
+    _, extension = os.path.splitext(name)
+    if extension == '.txt':
+        with open(attachment.file.path) as f:
+            content = f.read()
+            print(content)
+    elif extension in ['.csv']:
+        print("Csv documents are not supported")
+    elif extension == '.pdf':
+        print("PDF files are not supported")
+
+    return content and f'{name}\n\n{content}\nEnd of file {name}\n\n'
+
+
+LLAMA3_START_HEADER_ID = "<|start_header_id|>";
+LLAMA3_END_HEADER_ID = "<|end_header_id|>";
+LLAMA3_EOT_ID = "<|eot_id|>";
+
+
+def llamaRoleTemplate(role):
+    return f'{LLAMA3_START_HEADER_ID}{role}{LLAMA3_END_HEADER_ID}\n\n%message{LLAMA3_EOT_ID}'
+
+
+chatTemplate = {
+    'question': llamaRoleTemplate("user"),
+    'answer': llamaRoleTemplate("assistant"),
+    'systemMessage': llamaRoleTemplate("system"),
+    'startOfText': "<|begin_of_text|>",
+    'promptSuffix': f'{LLAMA3_START_HEADER_ID}assistant{LLAMA3_END_HEADER_ID}\n\n',
+    'continuationPrefix': f'{LLAMA3_EOT_ID}{LLAMA3_START_HEADER_ID}assistant{LLAMA3_END_HEADER_ID}\n\n'
+}
+
+
+class ChatEncoder:
+    def __init__(self, templateSpec, useBos=False):
+        self.spec = templateSpec
+        self.useBos = useBos
+
+    def __call__(self, systemMessage, messages):
+        questionTemplate = self.spec['question']
+        answerTemplate = self.spec['answer']
+
+        conversation = ''
+
+        system_template = self.spec['systemMessage']
+
+        if systemMessage:
+            conversation += system_template.replace('%message', systemMessage)
+
+        for i, msg in enumerate(messages):
+            template = questionTemplate if i % 2 == 0 else answerTemplate
+            conversation += template.replace('%message', msg)
+
+        conversation = conversation + self.spec['promptSuffix']
+        if (self.useBos):
+            conversation = self.spec.startOfText + conversation
+        return conversation
+
+
+def get_prompt(message):
+    chat_history = [message]
+    while message.parent:
+        message = message.parent
+        chat_history.append(message)
+
+    config = message.chat.configuration
+    template_spec = (config and config.template_spec) or chatTemplate
+
+    chat_encoder = ChatEncoder(template_spec)
+    
+    messages = []
+    for msg in reversed(chat_history):
+        text = msg.text
+        if msg.attachments_text:
+            text += msg.attachments_text
+        messages.append(text)
+
+    system_message = message.chat.system_message or ''
+    return chat_encoder(system_message, messages)
+
+
 @shared_task
 def generate_llm_response(generation_spec_dict, socket_session_id):
     generation_spec = llm_utils.GenerationSpec(**generation_spec_dict)
     token_channel = f'{TOKEN_STREAM}:{socket_session_id}'
+
+    attachments_text = ""
+    id = generation_spec.parent_message_id
+    if id:
+        q = Message.objects.filter(pk=id)
+        if q.exists():
+            message = q.first()
+            for attachment in message.attachments.all():
+                attachments_text += parse_attachment(attachment)
+
+            message.attachments_text = attachments_text
+            message.save()
+            generation_spec.prompt = get_prompt(message)
 
     queue = Queue()
     r = redis.Redis()

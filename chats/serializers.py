@@ -3,7 +3,7 @@ import base64
 import os
 import markdown
 from rest_framework import serializers
-from .models import SystemMessage, Preset, Configuration, Chat, Message, SpeechSample
+from .models import SystemMessage, Preset, Configuration, Chat, Message, Attachment, SpeechSample
 from tools.api_calls import backend
 
 
@@ -62,18 +62,30 @@ class ChatSerializer(serializers.ModelSerializer):
         return super().update(instance, validated_data)
 
 
+
+class AttachmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Attachment
+        fields = ['id', 'original_name', 'file', 'message']
+        read_only_fields = ['original_name', 'file', 'message']
+
+
 class MessageSerializer(serializers.ModelSerializer):
     chat = serializers.PrimaryKeyRelatedField(many=False, required=False, queryset=Chat.objects.all())
 
     clean_text = serializers.SerializerMethodField()
     html = serializers.SerializerMethodField()
     image_b64 = serializers.SerializerMethodField()
-    
+    attachments = serializers.ListField(
+        child=serializers.FileField(max_length=None, allow_empty_file=True),
+        allow_empty=True, min_length=None, max_length=None, write_only=True, required=False)
+
     class Meta:
         model = Message
         fields = ['id', 'text', 'clean_text', 'html', 'date_time',
-                  'generation_details', 'parent', 'replies', 'chat', 'audio', 'image', 'image_b64']
-        read_only_fields = ['replies', 'audio']
+                  'generation_details', 'parent', 'replies', 'chat',
+                  'audio', 'image', 'image_b64', 'attachments', 'attachments_text']
+        read_only_fields = ['replies', 'audio', 'attachments_text']
 
     def get_clean_text(self, obj):
         open_tag = backend.open_apicall_tag
@@ -96,8 +108,15 @@ class MessageSerializer(serializers.ModelSerializer):
         return to_data_uri(obj.image)
 
     def create(self, validated_data):
-        print(validated_data)
+        attachments = []
+        if 'attachments' in validated_data:
+            attachments = validated_data.pop('attachments')
+
         obj = super().create(validated_data)
+
+        if attachments:
+            for attach in attachments:
+                Attachment.objects.create(original_name=attach.name, file=attach, message=obj)
 
         if "chat" in validated_data:
             obj.chat = validated_data["chat"]
@@ -112,7 +131,7 @@ class TreebankSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Message
-        fields = ['id', 'text', 'date_time', 'generation_details', 'parent', 'replies', 'chat', 'image', 'image_b64']
+        fields = ['id', 'text', 'date_time', 'generation_details', 'parent', 'replies', 'chat', 'image', 'image_b64', 'attachments_text']
         read_only_fields = ['replies', 'chat']
 
     def get_replies(self, obj):

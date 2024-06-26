@@ -16,6 +16,7 @@ class GenerationSpec:
     inference_config: dict
     sampling_config: dict
     clear_context: bool
+    parent_message_id: int
     image_b64: str = ''
 
     def to_dict(self):
