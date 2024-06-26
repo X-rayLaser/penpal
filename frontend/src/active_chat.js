@@ -539,28 +539,9 @@ class ActiveChat extends React.Component {
         let committedText = "";
         
         let streamer = new WebsocketResponseStreamer('/chats/generate_reply/', 'POST', this.props.websocket);
-        let completionGenerator;
-
-        let prompt;
-
-        if (inferenceConfig.launch_params.hasOwnProperty("mmprojector")) {
-            prompt = this.prepareMessages();
-
-            completionGenerator = new SimpleTextCompletionGenerator(
-                inferenceConfig, llmSettings, leaf.id, streamer, this.props.socketSessionId
-            );
-        } else {
-            let obj = this.preparePromptWithRecreatedConversation();
-            prompt = obj.prompt;
-
-            let chatEncoder = obj.chatEncoder;
-            completionGenerator = new ToolAugmentedCompletionGenerator(
-                inferenceConfig, llmSettings, leaf.id, streamer, this.props.socketSessionId, chatEncoder.spec
-            );
-        }
-
-        console.log("full prompt!!!:")
-        console.log(prompt);
+        let completionGenerator = new ToolAugmentedCompletionGenerator(
+            inferenceConfig, llmSettings, leaf.id, streamer, this.props.socketSessionId
+        );
 
         completionGenerator.onChunk = (chunk) => {
             this.setState(prevState => ({
@@ -578,7 +559,7 @@ class ActiveChat extends React.Component {
         let bufferingPlayer = new BufferringAudioAutoPlayer();
         const speechPromise = captureAndPlaySpeech(this.props.websocket, bufferingPlayer);
 
-        let newMessagePromise = completionGenerator.generate(prompt).then(() => {
+        let newMessagePromise = completionGenerator.generate().then(() => {
             let generatedText = this.state.completion;
             bufferingPlayer.calculateBufferSize(generatedText);
             return this.postMessage(generatedText, leaf.id);
@@ -623,85 +604,6 @@ class ActiveChat extends React.Component {
                 generationError: reason
             });
         });
-    }
-
-    preparePrompt(leaf) {
-        if (this.state.contextLoaded) {
-            return leaf.data.text + "\n";
-        } else {
-            return this.preparePromptWithRecreatedConversation();
-        }
-    }
-
-    prepareMessages() {
-        let sysMessageText = this.state.system_message;
-
-        let toolText = this.state.toolText;
-        if (toolText) {
-            sysMessageText += toolText;
-        }
-
-        let messages = getThreadMessages(this.state.chatTree, this.state.treePath);
-        let systemMessage = {
-            role: "system",
-            content: sysMessageText
-        };
-        
-        let preparedMessages = messages.map((msg, index) => {
-            let text = msg.data.text;
-
-            console.log("Preparing messages. Message: ", msg);
-
-            if (index % 2 === 0) {
-                let content = [{
-                    type: "text",
-                    text
-                }];
-
-                if (msg.data.image_b64) {
-                    content.push({
-                        type: "image_url",
-                        image_url: { url: msg.data.image_b64 }
-                    });
-                }
-
-                return {
-                    role: "user",
-                    content
-                };
-            } else {
-                return {
-                    role: "assistant",
-                    content: [{ type: "text", text }]
-                }
-            }
-        });
-
-        return [systemMessage, ...preparedMessages];
-    }
-
-    preparePromptWithRecreatedConversation() {
-        let sysMessageText = this.state.system_message;
-
-        let toolText = this.state.toolText;
-        if (toolText) {
-            sysMessageText += toolText;
-        }
-
-        let messages = getThreadMessages(this.state.chatTree, this.state.treePath);
-        let chatEncoder;
-        if (this.state.configuration && this.state.configuration.template_spec) {
-            let templateSpec = JSON.parse(this.state.configuration.template_spec);
-            chatEncoder = new ChatEncoder(templateSpec);
-        } else {
-            let instructMode = this.state.mode === RAW_MODE ? false : true;
-            chatEncoder = guessChatEncoder(this.state.configuration, instructMode);
-        }
-
-        return {
-            prompt: chatEncoder.encode(sysMessageText, messages),
-            chatEncoder
-        };
     }
 
     handleBranchSwitch(message, newBranchId) {

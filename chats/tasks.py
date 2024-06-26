@@ -16,6 +16,8 @@ from tools.api_calls import (
     ApiCallNotFoundError
 )
 
+from tools import get_specification
+
 TOKEN_STREAM = 'token_stream'
 SPEECH_CHANNEL = 'speech_stream'
 STOPWORD = "[|END_OF_STREAM|]"
@@ -103,12 +105,21 @@ chatTemplate = {
 }
 
 
-class ChatEncoder:
-    def __init__(self, templateSpec, useBos=False):
-        self.spec = templateSpec
-        self.useBos = useBos
+class ChatRenderer:
+    def __init__(self, template_spec, use_bos=False):
+        self.spec = template_spec
+        self.use_bos = use_bos
 
-    def __call__(self, systemMessage, messages):
+    def __call__(self, system_message, messages):
+        raise NotImplementedError
+
+    @classmethod
+    def concatenate(cls, old_prompt, continuation):
+        raise NotImplementedError
+
+
+class ChatRendererToString(ChatRenderer):
+    def __call__(self, system_message, messages):
         questionTemplate = self.spec['question']
         answerTemplate = self.spec['answer']
 
@@ -116,20 +127,83 @@ class ChatEncoder:
 
         system_template = self.spec['systemMessage']
 
-        if systemMessage:
-            conversation += system_template.replace('%message', systemMessage)
+        if system_message:
+            conversation += system_template.replace('%message', system_message)
 
         for i, msg in enumerate(messages):
             template = questionTemplate if i % 2 == 0 else answerTemplate
-            conversation += template.replace('%message', msg)
+            text = msg.text
+            if msg.attachments_text:
+                text += msg.attachments_text
+            conversation += template.replace('%message', text)
 
         conversation = conversation + self.spec['promptSuffix']
-        if (self.useBos):
-            conversation = self.spec.startOfText + conversation
+        if (self.use_bos):
+            conversation = self.spec['startOfText'] + conversation
         return conversation
 
+    @classmethod
+    def concatenate(cls, old_prompt, continuation):
+        return old_prompt + continuation + chatTemplate['continuationPrefix']
 
-def get_prompt(message):
+
+class ChatRendererToList(ChatRenderer):
+    def __call__(self, system_message, messages):
+        result = []
+
+        if system_message:
+            result.append(self.render_system_message(system_message))
+
+        for i, msg in enumerate(messages):
+            text = msg.text
+            if msg.attachments_text:
+                text += msg.attachments_text
+
+            render = self.render_user_message if i % 2 == 0 else self.render_ai_message
+            result.append(render(msg, text))
+
+        return result
+
+    def render_system_message(self, text):
+        return {
+            "role": "system",
+            "content": text
+        }
+
+    def render_user_message(self, msg, text):
+        content = [{
+            "type": "text",
+            "text": text
+        }]
+
+        if (msg.image_b64):
+            content.push({
+                "type": "image_url",
+                "image_url": {
+                    "url": msg.image_b64
+                }
+            })
+
+        return {
+            "role": "user",
+            "content": content
+        }
+
+    def render_ai_message(self, msg, text):
+        return {
+            "role": "assistant",
+            "content": [{ "type": "text", "text": text }]
+        }
+
+    @classmethod
+    def concatenate(cls, old_prompt, continuation):
+        new_prompt = old_prompt[:]
+        last_message = new_prompt[-1]
+        last_message["content"]["text"] += continuation
+        return new_prompt
+
+
+def get_prompt(message, chat_encoder_cls):
     chat_history = [message]
     while message.parent:
         message = message.parent
@@ -138,16 +212,15 @@ def get_prompt(message):
     config = message.chat.configuration
     template_spec = (config and config.template_spec) or chatTemplate
 
-    chat_encoder = ChatEncoder(template_spec)
-    
-    messages = []
-    for msg in reversed(chat_history):
-        text = msg.text
-        if msg.attachments_text:
-            text += msg.attachments_text
-        messages.append(text)
+    chat_encoder = chat_encoder_cls(template_spec)
+
+    messages = reversed(chat_history)
 
     system_message = message.chat.system_message or ''
+
+    if (config.tools):
+        system_message += get_specification(config)
+
     return chat_encoder(system_message, messages)
 
 
@@ -158,6 +231,13 @@ def generate_llm_response(generation_spec_dict, socket_session_id):
 
     attachments_text = ""
     id = generation_spec.parent_message_id
+
+    launch_params = generation_spec.inference_config.get('launch_params')
+    if launch_params and "mmprojector" in launch_params:
+        chat_encoder_cls = ChatRendererToList
+    else:
+        chat_encoder_cls = ChatRendererToString
+
     if id:
         q = Message.objects.filter(pk=id)
         if q.exists():
@@ -167,7 +247,8 @@ def generate_llm_response(generation_spec_dict, socket_session_id):
 
             message.attachments_text = attachments_text
             message.save()
-            generation_spec.prompt = get_prompt(message)
+
+            generation_spec.prompt = get_prompt(message, chat_encoder_cls)
 
     queue = Queue()
     r = redis.Redis()
@@ -193,12 +274,12 @@ def generate_llm_response(generation_spec_dict, socket_session_id):
 
         try:
             api_call, offset = find_api_call(generated_text)
-
             api_call_string = make_api_call(api_call)
             finalized_segment = generated_text[:offset] + api_call_string
 
-            new_prompt = generation_spec.prompt + finalized_segment + chatTemplate['continuationPrefix']
-            generation_spec.prompt = new_prompt
+            generation_spec.prompt = chat_encoder_cls.concatenate(
+                generation_spec.prompt, finalized_segment
+            )
             generated_text = ''
 
             msg = {'event': 'generation_paused', 'data': finalized_segment}

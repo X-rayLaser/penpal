@@ -37,10 +37,10 @@ export class SimpleTextCompletionGenerator {
         }
     }
 
-    generate(messages) {
+    generate() {
         return new Promise((resolve, reject) => {
             let generatedText = "";
-            let body = this.prepareBody(messages);
+            let body = this.prepareBody();
 
             this.streamer.onChunk = chunk => {
                 generatedText += chunk;
@@ -56,9 +56,8 @@ export class SimpleTextCompletionGenerator {
         });
     }
 
-    prepareBody(prompt) {
+    prepareBody() {
         return {
-            prompt,
             inference_config: this.inferenceConfig,
             clear_context: true,
             llm_settings: this.llmSettings,
@@ -69,13 +68,8 @@ export class SimpleTextCompletionGenerator {
 }
 
 export class ToolAugmentedCompletionGenerator extends SimpleTextCompletionGenerator {
-    constructor(inferenceConfig, llmSettings, leafId, tokenStreamer, socketSessionId, chatTemplate) {
-        super(inferenceConfig, llmSettings, leafId, tokenStreamer, socketSessionId);
-        this.chatTemplate = chatTemplate;
-    }
-
-    generate(prompt) {
-        let body = this.prepareBody(prompt);
+    generate() {
+        let body = this.prepareBody();
 
         this.streamer.onChunk = chunk => {
             this.onChunk(chunk);

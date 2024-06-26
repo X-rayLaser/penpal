@@ -81,7 +81,6 @@ class SpeechSampleViewSet(viewsets.ReadOnlyModelViewSet):
 
 def _generate_completion(request):
     body = request.data
-    prompt = body.get("prompt")
     inference_config = body.get("inference_config")
     llm_settings = body.get("llm_settings", {})
     clear_context = body.get("clear_context", False)
@@ -90,24 +89,19 @@ def _generate_completion(request):
 
     parent_message_id = int(body.get("parent", -1))
 
-    if prompt:
-        print("about to start streaming. Prompt:", prompt)
-        image_data = base64.b64decode(image_b64) if image_b64 else None
+    image_data = base64.b64decode(image_b64) if image_b64 else None
         
-        spec = llm_utils.GenerationSpec(
-            prompt=prompt,
-            inference_config=inference_config,
-            sampling_config=llm_settings,
-            clear_context=clear_context,
-            image_b64=image_data,
-            parent_message_id=parent_message_id
-        )
+    spec = llm_utils.GenerationSpec(
+        prompt="",
+        inference_config=inference_config,
+        sampling_config=llm_settings,
+        clear_context=clear_context,
+        image_b64=image_data,
+        parent_message_id=parent_message_id
+    )
 
-        celery_task = generate_llm_response.delay(spec.to_dict(), socket_session_id)
-        return Response({'task_id': celery_task.task_id})
-
-    return Response({'errors': ["Expected 'prompt' field in json request body"]}, 
-                    status=status.HTTP_400_BAD_REQUEST)
+    celery_task = generate_llm_response.delay(spec.to_dict(), socket_session_id)
+    return Response({'task_id': celery_task.task_id})
 
 
 @api_view(["POST"])
