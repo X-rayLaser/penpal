@@ -32,7 +32,7 @@ async def handler(websocket):
                     if text == STOPWORD:
                         message = json.dumps({'event': 'end_of_stream', 'data': text})
                     else:
-                        message = json.dumps({'event': 'tokens_arrived', 'data': text})
+                        message = text
                 elif channel == speech_channel:
                     if text == STOP_SPEECH:
                         message = json.dumps({'event': 'end_of_speech', 'data': text})

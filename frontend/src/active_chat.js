@@ -562,7 +562,7 @@ class ActiveChat extends React.Component {
         console.log("full prompt!!!:")
         console.log(prompt);
 
-        completionGenerator.onChunk = (generatedText, chunk) => {
+        completionGenerator.onChunk = (chunk) => {
             this.setState(prevState => ({
                 completion: prevState.completion + chunk
             }));

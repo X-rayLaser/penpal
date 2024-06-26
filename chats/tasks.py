@@ -9,6 +9,12 @@ from django.core.files.base import ContentFile
 import llm_utils
 import tts
 from chats.models import SpeechSample, Message
+from tools.api_calls import (
+    find_api_call,
+    make_api_call,
+    ApiFunctionCall,
+    ApiCallNotFoundError
+)
 
 TOKEN_STREAM = 'token_stream'
 SPEECH_CHANNEL = 'speech_stream'
@@ -170,14 +176,35 @@ def generate_llm_response(generation_spec_dict, socket_session_id):
     consumer.start()
 
     sentence = ''
-    for token in llm_utils.stream_tokens(generation_spec):
-        sentence += token
-        r.publish(token_channel, token)
+    generated_text = ''
 
-        if "." in token or "!" in token or "?" in token:
-            print("got sentence", sentence)
-            queue.put(sentence)
-            sentence = ''
+    while True:
+        for token in llm_utils.stream_tokens(generation_spec):
+            sentence += token
+            generated_text += token
+
+            msg = {'event': 'tokens_arrived', 'data': token}
+            r.publish(token_channel, json.dumps(msg))
+
+            if "." in token or "!" in token or "?" in token:
+                print("got sentence", sentence)
+                queue.put(sentence)
+                sentence = ''
+
+        try:
+            api_call, offset = find_api_call(generated_text)
+
+            api_call_string = make_api_call(api_call)
+            finalized_segment = generated_text[:offset] + api_call_string
+
+            new_prompt = generation_spec.prompt + finalized_segment + chatTemplate['continuationPrefix']
+            generation_spec.prompt = new_prompt
+            generated_text = ''
+
+            msg = {'event': 'generation_paused', 'data': finalized_segment}
+            r.publish(token_channel, json.dumps(msg))
+        except ApiCallNotFoundError:
+            break
 
     r.publish(token_channel, STOPWORD)
     queue.put('')

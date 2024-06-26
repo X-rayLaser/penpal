@@ -44,7 +44,7 @@ export class SimpleTextCompletionGenerator {
 
             this.streamer.onChunk = chunk => {
                 generatedText += chunk;
-                this.onChunk(generatedText, chunk);
+                this.onChunk(chunk);
             };
 
             this.streamer.stream(body).then(() => {
@@ -75,55 +75,22 @@ export class ToolAugmentedCompletionGenerator extends SimpleTextCompletionGenera
     }
 
     generate(prompt) {
+        let body = this.prepareBody(prompt);
+
+        this.streamer.onChunk = chunk => {
+            this.onChunk(chunk);
+        };
+        this.streamer.onPaused = (segment) => {
+            this.onPaused(segment);
+        };
+
         return new Promise((resolve, reject) => {
-            const generateWithResolvedAPICalls = (currentPrompt) => {
-                let generatedText = "";
-                let body = this.prepareBody(currentPrompt);
-
-                this.streamer.onChunk = chunk => {
-                    generatedText += chunk;
-                    this.onChunk(generatedText, chunk);
-                };
-
-                this.streamer.stream(body).then(() => {
-                    let encodedText = encodeURIComponent(generatedText);
-                    let findApiUrl = `/chats/find_api_call/?text=${encodedText}`;
-
-                    let fetcher = new GenericFetchJson();
-
-                    fetcher.performFetch(findApiUrl).then(data => {
-
-                        if (data.hasOwnProperty('offset')) {
-                            this.makeApiCall(data, generatedText).then(finalizedSegment => {
-                                this.onPaused(finalizedSegment);
-                                let newPrompt = currentPrompt + finalizedSegment + this.chatTemplate.continuationPrefix;
-                                generateWithResolvedAPICalls(newPrompt);
-                            });
-                        } else {
-                            resolve(generatedText);
-                        }
-                    });
-                }).catch(reason => {
-                    console.error(reason);
-                    reject(reason.error);
-                });
-            }
-
-            generateWithResolvedAPICalls(prompt);
-        });
-    }
-
-    makeApiCall(callInfo, generatedText) {
-        let offset = callInfo.offset;
-        let api_call = callInfo.api_call;
-
-        let textSlice = generatedText.substring(0, offset);
-
-        let fetcher = new GenericFetchJson();
-
-        return fetcher.performFetch(api_call.url).then(data => {
-            let finalizedSegment = textSlice + data.api_call_string;
-            return finalizedSegment;
+            this.streamer.stream(body).then(() => {
+                resolve();
+            }).catch(reason => {
+                console.error(reason);
+                reject(reason.error);
+            });
         });
     }
 }
@@ -180,6 +147,7 @@ class BaseResponseStreamer {
 
         this.onChunk = function(chunk) {}
         this.onDone = function() {};
+        this.onPaused = function(segment) {}
     }
 
     stream(data) {
@@ -217,6 +185,9 @@ export class WebsocketResponseStreamer extends BaseResponseStreamer {
                 } else if (payload.event === "tokens_arrived") {
                     tokenString += payload.data;
                     this.onChunk(payload.data);
+                } else if (payload.event === "generation_paused") {
+                    tokenString = payload.data;
+                    this.onPaused(tokenString);
                 }
             };
 
