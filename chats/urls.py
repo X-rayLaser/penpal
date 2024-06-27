@@ -12,7 +12,6 @@ router.register("speech-samples", views.SpeechSampleViewSet)
 
 urlpatterns = [
     path('generate_reply/', views.generate_reply),
-    path('generate_speech/<int:message_pk>/', views.generate_speech),
     path('transcribe_speech/', views.transcribe_speech),
     path('completion/', views.generate_completion),
     path('chats/', views.ChatList.as_view()),

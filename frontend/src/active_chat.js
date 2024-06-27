@@ -509,6 +509,8 @@ class ActiveChat extends React.Component {
     }
 
     generateData() {
+        this.saveSystemMessage();
+
         let leaf = traverseTree(this.state.chatTree, this.state.treePath);
 
         let llmSettings = {
@@ -525,16 +527,6 @@ class ActiveChat extends React.Component {
             file_name: this.state.configuration.file_name,
             launch_params: this.state.configuration.launch_params
         };
-
-        //saving system_message to db
-        const id = this.props.router.params.id;
-        const url = `/chats/chats/${id}/`;
-        const fetcher = new GenericFetchJson();
-        fetcher.method = "PATCH";
-        fetcher.body = {
-            system_message: this.state.system_message
-        };
-        fetcher.performFetch(url);
 
         let committedText = "";
         
@@ -556,54 +548,60 @@ class ActiveChat extends React.Component {
             return "0";
         };
 
-        let bufferingPlayer = new BufferringAudioAutoPlayer();
-        const speechPromise = captureAndPlaySpeech(this.props.websocket, bufferingPlayer);
 
-        let newMessagePromise = completionGenerator.generate().then(() => {
-            let generatedText = this.state.completion;
-            bufferingPlayer.calculateBufferSize(generatedText);
-            return this.postMessage(generatedText, leaf.id);
-        });
+        const socketListener = msgEvent => {
+            let payload = JSON.parse(msgEvent.data);
+            if (payload.event === "generation_complete") {
+                this.props.websocket.removeEventListener("message", socketListener);
+                let message = payload.data;
 
-        Promise.all([speechPromise, newMessagePromise]).then((values) => {
-            console.log('promise all', values)
-            let message = values[1];
-
-            let samples = bufferingPlayer.pieces.map(piece => piece.id);
-            
-            const url = `/chats/generate_speech/${message.id}/`;
-            const fetcher = new GenericFetchJson();
-            fetcher.method = "POST";
-            fetcher.body = {
-                samples
-            };
-            return fetcher.performFetch(url);
-        }).then(message => {
-            this.setState(prevState => {
-                let res = addMessage(
-                    prevState.chatTree, prevState.treePath, leaf.id, message
-                );
-
-                return {
+                this.setState(prevState => {
+                    let res = addMessage(
+                        prevState.chatTree, prevState.treePath, leaf.id, message
+                    );
+    
+                    return {
+                        prompt: "",
+                        completion: "",
+                        inProgress: false,
+                        chatTree: res.tree,
+                        contextLoaded: true,
+                        treePath: res.thread,
+                        generationError: ""
+                    }
+                });
+            } else if (payload.event === "generation_error") {
+                let reason = payload.data;
+                console.error("Generation failed: ", reason);
+                this.setState({
                     prompt: "",
                     completion: "",
                     inProgress: false,
-                    chatTree: res.tree,
                     contextLoaded: true,
-                    treePath: res.thread,
-                    generationError: ""
-                }
-            });
-        }).catch(reason => {
-            console.error("Generation failed: ", reason);
-            this.setState({ 
-                prompt: "",
-                completion: "",
-                inProgress: false,
-                contextLoaded: true,
-                generationError: reason
-            });
+                    generationError: reason
+                });
+            }
+        };
+        this.props.websocket.addEventListener("message", socketListener);
+
+        let bufferingPlayer = new BufferringAudioAutoPlayer();
+        captureAndPlaySpeech(this.props.websocket, bufferingPlayer);
+
+        completionGenerator.generate().then(() => {
+            let generatedText = this.state.completion;
+            bufferingPlayer.calculateBufferSize(generatedText);
         });
+    }
+
+    saveSystemMessage() {
+        const id = this.props.router.params.id;
+        const url = `/chats/chats/${id}/`;
+        const fetcher = new GenericFetchJson();
+        fetcher.method = "PATCH";
+        fetcher.body = {
+            system_message: this.state.system_message
+        };
+        fetcher.performFetch(url);
     }
 
     handleBranchSwitch(message, newBranchId) {

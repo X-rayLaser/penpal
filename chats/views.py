@@ -29,6 +29,8 @@ from .serializers import (
     SystemMessageSerializer,
     SpeechSampleSerializer
 )
+from .utils import join_wavs
+
 import llm_utils
 from tools import llm_tools, get_specification
 from tools.api_calls import (
@@ -121,51 +123,6 @@ def clear_llm_context(request):
 @api_view(["POST"])
 def generate_reply(request):
     return _generate_completion(request)
-
-
-def join_wavs(samples, result_path):
-    data= []
-    params = None
-
-    for sample in samples:
-        file_field = sample.audio
-        w = wave.open(file_field.path, 'rb')
-        params = w.getparams()
-        data.append(w.readframes(w.getnframes()))
-        w.close()
-
-    with wave.open(result_path, 'wb') as output:
-        output.setparams(params)
-        for row in data:
-            output.writeframes(row)
-
-    with open(result_path, 'rb') as f:
-        res = f.read()
-    
-    os.remove(result_path)
-    return res
-
-
-@api_view(["POST"])
-def generate_speech(request, message_pk):
-    # todo: move this heavy logic to a separate celery task
-    message = get_object_or_404(Message, pk=message_pk)
-
-    sample_ids = request.data["samples"]
-
-    wav_files = SpeechSample.objects.filter(id__in=sample_ids)
-
-    if wav_files:
-        output_name = f'{uuid.uuid4().hex}.wav'
-        output_path = os.path.join(settings.MEDIA_ROOT, output_name)
-        audio_data = join_wavs(wav_files, output_path)
-
-        audio_file = ContentFile(audio_data, name="tts-audio-file.wav")
-        message.audio = audio_file
-        message.save()
-    
-    ser = MessageSerializer(message, context={'request': request})
-    return Response(ser.data, status=status.HTTP_200_OK)
 
 
 class BinaryParser(BaseParser):

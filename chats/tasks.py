@@ -3,19 +3,22 @@ import time
 from queue import Queue
 import json
 import os
+import uuid
 from celery import shared_task
 import redis
 from django.core.files.base import ContentFile
+from django.conf import settings
 import llm_utils
 import tts
 from chats.models import SpeechSample, Message
+from .serializers import MessageSerializer
 from tools.api_calls import (
     find_api_call,
     make_api_call,
     ApiFunctionCall,
     ApiCallNotFoundError
 )
-
+from .utils import join_wavs
 from tools import get_specification
 
 TOKEN_STREAM = 'token_stream'
@@ -41,6 +44,7 @@ class Consumer(threading.Thread):
         self.queue = queue
         self.redis_bus = redis_bus
         self.session_id = socket_session_id
+        self.samples = []
 
     def run(self):
         speech_channel = f'{SPEECH_CHANNEL}:{self.session_id}'
@@ -54,6 +58,7 @@ class Consumer(threading.Thread):
             t0 = time.time()
             try:
                 sample = synthesize_speech(sentence)
+                self.samples.append(sample)
             except Exception as e:
                 url = None
                 sample_id = None
@@ -224,31 +229,104 @@ def get_prompt(message, chat_encoder_cls):
     return chat_encoder(system_message, messages)
 
 
+class Producer:
+    def __init__(self, queue, redis_obj, redis_channel, chat_renderer_cls):
+        self.queue = queue
+        self.redis_obj = redis_obj
+        self.redis_channel = redis_channel
+        self.chat_renderer_cls = chat_renderer_cls
+
+    def __call__(self, generation_spec):
+        sentence = ''
+        generated_text = ''
+        response_text = ''
+
+        while True:
+            for token in llm_utils.stream_tokens(generation_spec):
+                sentence += token
+                generated_text += token
+
+                msg = {'event': 'tokens_arrived', 'data': token}
+                self.redis_obj.publish(self.redis_channel, json.dumps(msg))
+
+                if "." in token or "!" in token or "?" in token:
+                    self.queue.put(sentence)
+                    sentence = ''
+
+            try:
+                api_call, offset = find_api_call(generated_text)
+                api_call_string = make_api_call(api_call)
+                finalized_segment = generated_text[:offset] + api_call_string
+
+                generation_spec.prompt = self.chat_renderer_cls.concatenate(
+                    generation_spec.prompt, finalized_segment
+                )
+
+                generated_text = ''
+
+                msg = {'event': 'generation_paused', 'data': finalized_segment}
+                self.redis_obj.publish(self.redis_channel, json.dumps(msg))
+            except ApiCallNotFoundError:
+                response_text += generated_text
+                break
+            else:
+                response_text += finalized_segment
+
+        return response_text
+
+
+def get_last_message(generation_spec):
+    id = generation_spec.parent_message_id
+
+    message = None
+    if id:
+        q = Message.objects.filter(pk=id)
+        if q.exists():
+            message = q.first()
+    return message
+
+
+def create_response_message(parent, response_text, audio_samples):
+    response_message = Message()
+    response_message.text = response_text
+    response_message.parent = parent
+
+    if audio_samples:
+        output_name = f'{uuid.uuid4().hex}.wav'
+        output_path = os.path.join(settings.MEDIA_ROOT, output_name)
+        audio_data = join_wavs(audio_samples, output_path)
+        response_message.audio = ContentFile(audio_data, name="tts-audio-file.wav")
+
+    response_message.save()
+    
+    return response_message
+
+
 @shared_task
 def generate_llm_response(generation_spec_dict, socket_session_id):
     generation_spec = llm_utils.GenerationSpec(**generation_spec_dict)
     token_channel = f'{TOKEN_STREAM}:{socket_session_id}'
 
+    message = get_last_message(generation_spec)
+
+    if not message:
+        print("Cannot generate text without any messages in the history")
+        return
+
     attachments_text = ""
-    id = generation_spec.parent_message_id
+    for attachment in message.attachments.all():
+        attachments_text += parse_attachment(attachment)
+
+    message.attachments_text = attachments_text
+    message.save()
 
     launch_params = generation_spec.inference_config.get('launch_params')
     if launch_params and "mmprojector" in launch_params:
-        chat_encoder_cls = ChatRendererToList
+        chat_renderer_cls = ChatRendererToList
     else:
-        chat_encoder_cls = ChatRendererToString
+        chat_renderer_cls = ChatRendererToString
 
-    if id:
-        q = Message.objects.filter(pk=id)
-        if q.exists():
-            message = q.first()
-            for attachment in message.attachments.all():
-                attachments_text += parse_attachment(attachment)
-
-            message.attachments_text = attachments_text
-            message.save()
-
-            generation_spec.prompt = get_prompt(message, chat_encoder_cls)
+    generation_spec.prompt = get_prompt(message, chat_renderer_cls)
 
     queue = Queue()
     r = redis.Redis()
@@ -256,38 +334,19 @@ def generate_llm_response(generation_spec_dict, socket_session_id):
     consumer = Consumer(queue, r, socket_session_id)
     consumer.start()
 
-    sentence = ''
-    generated_text = ''
-
-    while True:
-        for token in llm_utils.stream_tokens(generation_spec):
-            sentence += token
-            generated_text += token
-
-            msg = {'event': 'tokens_arrived', 'data': token}
-            r.publish(token_channel, json.dumps(msg))
-
-            if "." in token or "!" in token or "?" in token:
-                print("got sentence", sentence)
-                queue.put(sentence)
-                sentence = ''
-
-        try:
-            api_call, offset = find_api_call(generated_text)
-            api_call_string = make_api_call(api_call)
-            finalized_segment = generated_text[:offset] + api_call_string
-
-            generation_spec.prompt = chat_encoder_cls.concatenate(
-                generation_spec.prompt, finalized_segment
-            )
-            generated_text = ''
-
-            msg = {'event': 'generation_paused', 'data': finalized_segment}
-            r.publish(token_channel, json.dumps(msg))
-        except ApiCallNotFoundError:
-            break
+    producer = Producer(queue, r, token_channel, chat_renderer_cls)
+    response_text = producer(generation_spec)
 
     r.publish(token_channel, STOPWORD)
     queue.put('')
     consumer.join()
     r.publish(f'{SPEECH_CHANNEL}:{socket_session_id}', STOP_SPEECH)
+
+    wav_samples = consumer.samples
+
+    response_message = create_response_message(message, response_text, wav_samples)   
+    serializer = MessageSerializer(response_message)
+    serialized_msg = serializer.data
+    
+    msg = {'event': 'generation_complete', 'data': serialized_msg}
+    r.publish(token_channel, json.dumps(msg))
