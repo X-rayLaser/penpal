@@ -4,6 +4,7 @@ from queue import Queue
 import json
 import os
 import uuid
+import traceback
 from celery import shared_task
 import redis
 from django.core.files.base import ContentFile
@@ -73,20 +74,25 @@ class Consumer(threading.Thread):
 
 
 def parse_attachment(attachment):
-    print("parsing attachment")
     name = attachment.original_name
+
+    print("parsing attachment", name)
+
+    allowed_text_files = ['.txt', '.py', '.rb', '.sh', '.cpp', '.c', '.hpp', '.h', '.js', '.html', '.css', '.ts', '.csv']
 
     # todo: support pdf, csv and other document files
     content = ''
     _, extension = os.path.splitext(name)
-    if extension == '.txt':
+    extension = extension.lower()
+    if extension in allowed_text_files:
         with open(attachment.file.path) as f:
             content = f.read()
-            print(content)
-    elif extension in ['.csv']:
-        print("Csv documents are not supported")
+    elif extension in ['.xls']:
+        print("Excel files are not supported. Ignoring", name)
     elif extension == '.pdf':
-        print("PDF files are not supported")
+        print("PDF files are not supported. Ignoring", name)
+    else:
+        print(f"Files with extension '{extension}' are not supported. Ignoring")
 
     return content and f'{name}\n\n{content}\nEnd of file {name}\n\n'
 
@@ -315,6 +321,18 @@ def get_last_message(generation_spec):
     return message
 
 
+def process_attachments(message):
+    attachments_text = ""
+    for attachment in message.attachments.all():
+        try:
+            attachments_text += parse_attachment(attachment)
+        except UnicodeDecodeError as e:
+            print('UnicodeDecodeError while processing file:', attachment.original_name)
+
+    message.attachments_text = attachments_text
+    message.save()
+
+
 def create_response_message(parent, response_text, audio_samples):
     response_message = Message()
     response_message.text = response_text
@@ -337,12 +355,7 @@ def generate_response_message(generation_spec_dict, socket_session_id, redis_obj
 
     message = get_last_message(generation_spec)
 
-    attachments_text = ""
-    for attachment in message.attachments.all():
-        attachments_text += parse_attachment(attachment)
-
-    message.attachments_text = attachments_text
-    message.save()
+    process_attachments(message)
 
     launch_params = generation_spec.inference_config.get('launch_params')
     if launch_params and "mmprojector" in launch_params:

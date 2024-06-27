@@ -99,7 +99,7 @@ function addNodeUnderRoot(tree, message) {
 }
 
 function populateData(obj) {
-    const keys = ["text", "clean_text", "html", "audio", "image", "image_b64", "attachments_text"];
+    const keys = ["text", "clean_text", "html", "audio", "image", "image_b64", "attached_files"];
 
     let data = {};
     for (let key of keys) {

@@ -8,3 +8,4 @@ celery
 websockets
 django-allauth
 olefile
+bleach

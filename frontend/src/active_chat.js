@@ -7,6 +7,8 @@ import Pagination from 'react-bootstrap/Pagination';
 import Alert from 'react-bootstrap/Alert';
 import ButtonGroup from 'react-bootstrap/ButtonGroup';
 import Badge from 'react-bootstrap/Badge';
+import Accordion from 'react-bootstrap/Accordion';
+
 import { withRouter, guessChatEncoder, ChatEncoder, 
     WebsocketResponseStreamer, SimpleTextCompletionGenerator, ToolAugmentedCompletionGenerator,
     BufferringAudioAutoPlayer, captureAndPlaySpeech
@@ -119,6 +121,10 @@ class Message extends React.Component {
             __html: message.data.html || message.data.text
         };
 
+        let attachmentsHtml = {
+            __html: message.data.attachments_text
+        };
+
         let cleanText = message.data.clean_text || message.data.text;
 
         let prerenderedHtml = <pre dangerouslySetInnerHTML={innerHtml} style={{whiteSpace: 'break-spaces'}} />;
@@ -165,8 +171,20 @@ class Message extends React.Component {
                         </audio>
                     )}
 
-                    {message.data.attachments_text && (
-                        <div className="mt-3">{message.data.attachments_text}</div>
+                    {message.data.attached_files && message.data.attached_files.length > 0 && (
+                        <div className="mt-3">
+                            <Accordion>
+                                <Accordion.Item eventKey="0">
+                                    <Accordion.Header>Attached documents</Accordion.Header>
+                                    <Accordion.Body>
+                                        <ul>
+                                            {message.data.attached_files.map((file, idx) => <li key={idx}>{file}</li>)}
+                                        </ul>
+                                        <pre dangerouslySetInnerHTML={attachmentsHtml} style={{whiteSpace: 'break-spaces'}} />
+                                    </Accordion.Body>
+                                </Accordion.Item>
+                            </Accordion>
+                        </div>
                     )}
 
                     {message.data.image && (
@@ -547,7 +565,6 @@ class ActiveChat extends React.Component {
             this.setState({ completion: committedText });
             return "0";
         };
-
 
         const socketListener = msgEvent => {
             let payload = JSON.parse(msgEvent.data);

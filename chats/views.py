@@ -190,8 +190,10 @@ def message_list(request):
         serializer = MessageSerializer(messages, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-    if 'image_data_uri' in request.data:
-        image_b64 = request.data.pop('image_data_uri')
+    data = request.data.copy()
+
+    if 'image_data_uri' in data:
+        image_b64 = data.pop('image_data_uri')
         fmt, image_str = image_b64.split(';base64,')
         extension = fmt.split('/')[-1]
 
@@ -202,7 +204,6 @@ def message_list(request):
     else:
         image = None
 
-    data = request.data.copy()
     data['image'] = image
     serializer = MessageSerializer(data=data)
 
