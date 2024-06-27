@@ -229,11 +229,8 @@ def get_prompt(message, chat_encoder_cls):
     return chat_encoder(system_message, messages)
 
 
-class Producer:
-    def __init__(self, queue, redis_obj, redis_channel, chat_renderer_cls):
-        self.queue = queue
-        self.redis_obj = redis_obj
-        self.redis_channel = redis_channel
+class ToolAugmentedTextGenerator:
+    def __init__(self, chat_renderer_cls):
         self.chat_renderer_cls = chat_renderer_cls
 
     def __call__(self, generation_spec):
@@ -245,34 +242,63 @@ class Producer:
             for token in llm_utils.stream_tokens(generation_spec):
                 sentence += token
                 generated_text += token
-
-                msg = {'event': 'tokens_arrived', 'data': token}
-                self.redis_obj.publish(self.redis_channel, json.dumps(msg))
+                self.process_token(token)
 
                 if "." in token or "!" in token or "?" in token:
-                    self.queue.put(sentence)
+                    self.process_sentence(sentence)
                     sentence = ''
 
-            try:
-                api_call, offset = find_api_call(generated_text)
-                api_call_string = make_api_call(api_call)
-                finalized_segment = generated_text[:offset] + api_call_string
+            finalized_segment = self._make_api_call(generated_text)
 
+            if finalized_segment:
                 generation_spec.prompt = self.chat_renderer_cls.concatenate(
                     generation_spec.prompt, finalized_segment
                 )
-
+                response_text += finalized_segment
                 generated_text = ''
-
-                msg = {'event': 'generation_paused', 'data': finalized_segment}
-                self.redis_obj.publish(self.redis_channel, json.dumps(msg))
-            except ApiCallNotFoundError:
+            else:
                 response_text += generated_text
                 break
-            else:
-                response_text += finalized_segment
 
         return response_text
+
+    def _make_api_call(self, generated_text):
+        try:
+            api_call, offset = find_api_call(generated_text)
+            api_call_string = make_api_call(api_call)
+            finalized_segment = generated_text[:offset] + api_call_string
+            self.process_api_call_segment(finalized_segment)
+            return finalized_segment
+        except ApiCallNotFoundError:
+            return None
+
+    def process_token(self, token):
+        pass
+
+    def process_sentence(self, sentence):
+        pass
+
+    def process_api_call_segment(self, text):
+        pass
+
+
+class Producer(ToolAugmentedTextGenerator):
+    def __init__(self, queue, redis_obj, redis_channel, chat_renderer_cls):
+        super().__init__(chat_renderer_cls)
+        self.queue = queue
+        self.redis_obj = redis_obj
+        self.redis_channel = redis_channel
+
+    def process_token(self, token):
+        msg = {'event': 'tokens_arrived', 'data': token}
+        self.redis_obj.publish(self.redis_channel, json.dumps(msg))
+
+    def process_sentence(self, sentence):
+        self.queue.put(sentence)
+
+    def process_api_call_segment(self, text):
+        msg = {'event': 'generation_paused', 'data': text}
+        self.redis_obj.publish(self.redis_channel, json.dumps(msg))
 
 
 def get_last_message(generation_spec):
@@ -283,6 +309,9 @@ def get_last_message(generation_spec):
         q = Message.objects.filter(pk=id)
         if q.exists():
             message = q.first()
+    
+    if not message:
+        raise Exception("Cannot generate text without any messages in the history")
     return message
 
 
@@ -302,16 +331,11 @@ def create_response_message(parent, response_text, audio_samples):
     return response_message
 
 
-@shared_task
-def generate_llm_response(generation_spec_dict, socket_session_id):
+def generate_response_message(generation_spec_dict, socket_session_id, redis_object):
     generation_spec = llm_utils.GenerationSpec(**generation_spec_dict)
     token_channel = f'{TOKEN_STREAM}:{socket_session_id}'
 
     message = get_last_message(generation_spec)
-
-    if not message:
-        print("Cannot generate text without any messages in the history")
-        return
 
     attachments_text = ""
     for attachment in message.attachments.all():
@@ -329,18 +353,21 @@ def generate_llm_response(generation_spec_dict, socket_session_id):
     generation_spec.prompt = get_prompt(message, chat_renderer_cls)
 
     queue = Queue()
-    r = redis.Redis()
 
-    consumer = Consumer(queue, r, socket_session_id)
+    consumer = Consumer(queue, redis_object, socket_session_id)
     consumer.start()
 
-    producer = Producer(queue, r, token_channel, chat_renderer_cls)
-    response_text = producer(generation_spec)
-
-    r.publish(token_channel, STOPWORD)
-    queue.put('')
-    consumer.join()
-    r.publish(f'{SPEECH_CHANNEL}:{socket_session_id}', STOP_SPEECH)
+    producer = Producer(queue, redis_object, token_channel, chat_renderer_cls)
+    try:
+        response_text = producer(generation_spec)
+    except Exception as e:
+        print('Generation failed:', str(e))
+        raise
+    finally:
+        redis_object.publish(token_channel, STOPWORD)
+        queue.put('')
+        consumer.join()
+        redis_object.publish(f'{SPEECH_CHANNEL}:{socket_session_id}', STOP_SPEECH)
 
     wav_samples = consumer.samples
 
@@ -349,4 +376,16 @@ def generate_llm_response(generation_spec_dict, socket_session_id):
     serialized_msg = serializer.data
     
     msg = {'event': 'generation_complete', 'data': serialized_msg}
-    r.publish(token_channel, json.dumps(msg))
+    redis_object.publish(token_channel, json.dumps(msg))
+
+
+@shared_task
+def generate_llm_response(generation_spec_dict, socket_session_id):
+    token_channel = f'{TOKEN_STREAM}:{socket_session_id}'
+    redis_object = redis.Redis()
+
+    try:
+        generate_response_message(generation_spec_dict, socket_session_id, redis_object)
+    except Exception as e:
+        msg = {'event': 'generation_error', 'data': str(e)}
+        redis_object.publish(token_channel, json.dumps(msg))
