@@ -8,6 +8,9 @@ import Alert from 'react-bootstrap/Alert';
 import ButtonGroup from 'react-bootstrap/ButtonGroup';
 import Badge from 'react-bootstrap/Badge';
 import Accordion from 'react-bootstrap/Accordion';
+import ListGroup from 'react-bootstrap/ListGroup';
+import Col from 'react-bootstrap/Col';
+import Row from 'react-bootstrap/Row';
 
 import { withRouter, guessChatEncoder, ChatEncoder, 
     WebsocketResponseStreamer, SimpleTextCompletionGenerator, ToolAugmentedCompletionGenerator,
@@ -294,7 +297,10 @@ class ActiveChat extends React.Component {
             generationError: "",
 
             imageUri: "",
-            attachments: []
+            attachments: [],
+
+            //ugly patch to force resetting the prompt form
+            submitSuccessCounter: 0
         };
 
         this.handleInput = this.handleInput.bind(this);
@@ -392,7 +398,6 @@ class ActiveChat extends React.Component {
 
     handleInput(text) {
         this.setState({ prompt: text, completion: "" });
-        console.log("Got input text from voice controlled textarea ", text);
     }
 
     handleSubmitPrompt(e) {
@@ -409,8 +414,10 @@ class ActiveChat extends React.Component {
 
         let leafId = leaf.id || null;
         this.setState({ inProgress: true });
-        //let promise = this.postMessage(this.state.prompt, leafId, chatId, this.state.imageUri);
-        let promise = this.postUserMessage(this.state.prompt, leafId, chatId, this.state.imageUri, this.state.attachments);
+
+        let promise = this.postUserMessage(
+            this.state.prompt, leafId, chatId, this.state.imageUri, this.state.attachments
+        );
 
         promise.then(message => {
             this.setState(prevState => {
@@ -429,8 +436,9 @@ class ActiveChat extends React.Component {
                     attachments: [],
                     chatTree: res.tree,
                     treePath: res.thread,
-                    submissionErrors: []
-                }
+                    submissionErrors: [],
+                    submitSuccessCounter: prevState.submitSuccessCounter + 1
+                };
             }, this.generateData);
         }).catch(reason => {
             console.error("Reason is ", reason)
@@ -466,11 +474,12 @@ class ActiveChat extends React.Component {
 
         if (attachments && attachments.length > 0) {
             for (let i = 0; i < attachments.length; i++) {
-                const file = attachments[i];
+                const fileWrapper = attachments[i];
+                const file = fileWrapper.file;
                 let fileId = `File_${i}`;
 
                 relativePaths[fileId] = {
-                    path: file.webkitRelativePath,
+                    path: fileWrapper.relativePath,
                     name: file.name
                 }
 
@@ -792,21 +801,22 @@ class ActiveChat extends React.Component {
                         onBranchSwitch={this.handleBranchSwitch}
                         onRegenerate={this.handleRegenerate} />
                 {this.state.inProgress && <ReplyInProgress text={this.state.completion} />}
-                <VoiceDictationTextareaForm submissionErrors={this.state.submissionErrors}
+                <PromptForm submissionErrors={this.state.submissionErrors}
                     onSubmit={this.handleSubmitPrompt}
                     onTextChange={this.handleInput}
                     onImageUpload={this.handleImageUpload}
                     onDirectoryUpload={this.handleDirectoryUpload}
                     text={this.state.prompt}
                     imageUri={this.state.imageUri}
-                    inProgress={this.state.inProgress} />
+                    inProgress={this.state.inProgress}
+                    key={this.state.submitSuccessCounter} />
             </div>
         );
     }
 };
 
 
-class VoiceDictationTextareaForm extends React.Component {
+class PromptForm extends React.Component {
     constructor(props) {
         super(props);
         this.state = {
@@ -822,7 +832,7 @@ class VoiceDictationTextareaForm extends React.Component {
 
         this.handleInput = this.handleInput.bind(this);
         this.handleUploadedImage = this.handleUploadedImage.bind(this);
-        this.handleDirectoryUpload = this.handleDirectoryUpload.bind(this);
+        this.handleDocumentsUpload = this.handleDocumentsUpload.bind(this);
 
         this.mediaRecorder = null;
         this.voice = [];
@@ -851,9 +861,8 @@ class VoiceDictationTextareaForm extends React.Component {
         reader.readAsDataURL(file);
     }
 
-    handleDirectoryUpload(e) {
-        console.log(e.target.files);
-        this.props.onDirectoryUpload(e.target.files);
+    handleDocumentsUpload(filesWithPath) {
+        this.props.onDirectoryUpload(filesWithPath);
     }
     startRecording() {
         this.setState({ micError: "", recordingError: "", starting: true });
@@ -985,21 +994,159 @@ class VoiceDictationTextareaForm extends React.Component {
                         <div className="mt-3">{submissionErrorsAlerts}</div>
                     }
                 </Form.Group>
-                <Form.Group controlId="imageFile" className="mb-3">
-                    <Form.Label>Upload image</Form.Label>
-                    <Form.Control type="file" onChange={this.handleUploadedImage} />
-                </Form.Group>
+                <details className="mb-3">
+                    <summary>Attach files</summary>
+                    <Form.Group controlId="imageFile" className="mt-3 mb-3">
+                        <Row className="align-items-center">
+                            <Form.Label column xs="auto">Upload image</Form.Label>
+                            <Col xs="auto">
+                                <Form.Control type="file" onChange={this.handleUploadedImage} />
+                            </Col>
+                        </Row>
+                    </Form.Group>
 
-                <Form.Group controlId="documentDirectory" className="mb-3">
-                    <Form.Label>Upload document directory</Form.Label>
-                    <Form.Control type="file" onChange={this.handleDirectoryUpload} webkitdirectory="true" multiple  />
-                </Form.Group>
+                    <div className="mb-3">
+                        {this.props.imageUri && <img src={this.props.imageUri} style={{ height: '200px'}} />}
+                    </div>
 
-                <div className="mb-3">
-                    {this.props.imageUri && <img src={this.props.imageUri} style={{ height: '200px'}} />}
-                </div>
+                    <DocumentUploadComponent onDocumentsUpload={this.handleDocumentsUpload} className="mb-3" />
+                </details>
                 {button}
             </Form>
+        );
+    }
+}
+
+
+class FileWrapper {
+    constructor(file, relativePath) {
+        this.file = file;
+        this.relativePath = relativePath || file.name;
+    }
+}
+
+class DocumentUploadComponent extends React.Component {
+    constructor(props) {
+        super(props);
+        this.state = {
+            uploadedFiles: [],
+            uploadedDirFiles: [],
+            filteredFiles: [],
+            ignoreList: [],
+            pattern: ""
+        };
+
+        this.handleChangePattern = this.handleChangePattern.bind(this);
+        this.handleAddPattern = this.handleAddPattern.bind(this);
+        this.updateFilteredFilesAndNotifyParent = this.updateFilteredFilesAndNotifyParent.bind(this);
+    }
+
+    handleFilesUpload(e) {
+        this.setState({
+            uploadedFiles: e.target.files
+        }, this.updateFilteredFilesAndNotifyParent);
+    }
+
+    handleDirectoryUpload(e) {
+        this.setState({
+            uploadedDirFiles: e.target.files
+        }, this.updateFilteredFilesAndNotifyParent);
+    }
+
+    updateFilteredFilesAndNotifyParent() {
+        let uploadedFiles = [...this.state.uploadedFiles];
+        let uploadedDirFiles = [...this.state.uploadedDirFiles];
+
+        let filteredFiles = this.filterAllFiles(uploadedFiles, uploadedDirFiles);
+
+        this.setState({ filteredFiles });
+        this.props.onDocumentsUpload(filteredFiles);
+    }
+
+    filterAllFiles(uploadedFiles, dirFiles) {
+        function matches(str, patterns) {
+            for (let pattern of patterns) {
+                if (str.search(pattern) !== -1) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        let filteredDirFiles = dirFiles.filter(file =>
+            !matches(file.webkitRelativePath || file.name, this.state.ignoreList)
+        ).map(file => new FileWrapper(file, file.webkitRelativePath || file.name));
+
+        let filteredFiles = uploadedFiles.filter(file => 
+            !matches(file.name, this.state.ignoreList)
+        ).map(file => new FileWrapper(file));
+
+        return [...filteredDirFiles, ...filteredFiles];
+    }
+
+    handleChangePattern(e) {
+        this.setState({ pattern: e.target.value });
+    }
+
+    handleAddPattern() {
+        this.setState((prevState) => ({
+            ignoreList: [...prevState.ignoreList, prevState.pattern],
+            pattern: ""
+        }), this.updateFilteredFilesAndNotifyParent);
+    }
+    render() {
+        const ignoreList = this.state.ignoreList.map((item, idx) => 
+            <ListGroup.Item key={idx}>{item}</ListGroup.Item>
+        );
+
+        let filePaths = this.state.filteredFiles.map(item => item.relativePath);
+
+        let filesToUpload = filePaths.map((item, idx) => <li key={idx}>{item}</li>);
+
+        return (
+            <div>
+                <Form.Group controlId="documentUpload" className="mb-3">
+                    <Row className="align-items-center">
+                        <Form.Label column xs="auto">Upload document</Form.Label>
+                        <Col xs="auto">
+                            <Form.Control type="file" onChange={e => this.handleFilesUpload(e)} multiple  />
+                        </Col>
+                    </Row>
+                </Form.Group>
+
+                <Form.Group controlId="documentDirectoryUpload" className="mb-3">
+                    <Row className="align-items-center">
+                        <Form.Label column xs="auto">Upload document directory</Form.Label>
+                        <Col xs="auto">
+                            <Form.Control type="file" onChange={e => this.handleDirectoryUpload(e)} webkitdirectory="true" multiple  />
+                        </Col>
+                    </Row>
+                </Form.Group>
+
+                {filesToUpload.length > 0 && (
+                    <div className="mb-3">
+                        <header>
+                            <h4>Files to be uploaded</h4>
+                        </header>
+                        <ul style={{ maxHeight: '300px', overflow: 'auto' }}>{filesToUpload}</ul>
+                    </div>
+                )}
+
+                <h4>Optionally, add file path patterns to exclude certain files</h4>
+
+                <ListGroup style={{ overflow: 'auto', maxHeight: '200px' }} className="mb-3">{ignoreList}</ListGroup>
+
+                <Form.Group controlId="addExcludePattern" className="mb-3">
+                    <Row>
+                        <Col xs="auto">
+                            <Form.Control value={this.state.pattern} onChange={this.handleChangePattern} type="text" />
+                        </Col>
+                        <Col xs="auto">
+                            <Button onClick={this.handleAddPattern}>Add pattern</Button>
+                        </Col>
+                    </Row>
+                </Form.Group>
+            </div>
         );
     }
 }

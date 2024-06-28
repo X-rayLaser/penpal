@@ -193,7 +193,7 @@ def message_list(request):
     data = request.data.copy()
 
     if 'image_data_uri' in data:
-        image_b64 = data.pop('image_data_uri')
+        image_b64 = data.pop('image_data_uri')[0]
         fmt, image_str = image_b64.split(';base64,')
         extension = fmt.split('/')[-1]
 
