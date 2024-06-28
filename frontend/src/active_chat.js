@@ -462,11 +462,25 @@ class ActiveChat extends React.Component {
             formData.append("image_data_uri", imageDataUri);
         }
 
+        let relativePaths = {};
+
         if (attachments && attachments.length > 0) {
-            for (const file of attachments) {
-                let fileName = file.webkitRelativePath || file.name;
-                formData.append("attachments", file, fileName);
+            for (let i = 0; i < attachments.length; i++) {
+                const file = attachments[i];
+                let fileId = `File_${i}`;
+
+                relativePaths[fileId] = {
+                    path: file.webkitRelativePath,
+                    name: file.name
+                }
+
+                formData.append("attachments", file, fileId);
             }
+        }
+
+        if (relativePaths) {
+            let pathsJson = JSON.stringify(relativePaths);
+            formData.append("relative_paths", pathsJson);
         }
 
         //handle errors gracefully

@@ -63,7 +63,6 @@ class ChatSerializer(serializers.ModelSerializer):
         return super().update(instance, validated_data)
 
 
-
 class AttachmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Attachment
@@ -81,13 +80,15 @@ class MessageSerializer(serializers.ModelSerializer):
         child=serializers.FileField(max_length=None, allow_empty_file=True),
         allow_empty=True, min_length=None, max_length=None, write_only=True, required=False)
 
+    relative_paths = serializers.JSONField(required=False, write_only=True)
+
     attached_files = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
         fields = ['id', 'text', 'clean_text', 'html', 'date_time',
                   'generation_details', 'parent', 'replies', 'chat',
-                  'audio', 'image', 'image_b64', 'attachments', 'attached_files']
+                  'audio', 'image', 'image_b64', 'attachments', 'attached_files', 'relative_paths']
         read_only_fields = ['replies', 'audio']
 
     def get_clean_text(self, obj):
@@ -118,17 +119,31 @@ class MessageSerializer(serializers.ModelSerializer):
         if 'attachments' in validated_data:
             attachments = validated_data.pop('attachments')
 
+        relative_paths = {}
+        if 'relative_paths' in validated_data:
+            # todo: do extra validation of path
+            relative_paths = validated_data.pop('relative_paths')
+
         obj = super().create(validated_data)
 
         if attachments:
             for attach in attachments:
-                Attachment.objects.create(original_name=attach.name, file=attach, message=obj)
+                file_path = self.obtain_file_path(relative_paths, attach)
+                Attachment.objects.create(original_name=file_path, file=attach, message=obj)
 
         if "chat" in validated_data:
             obj.chat = validated_data["chat"]
             obj.save()
             obj.chat.save()
         return obj
+
+    def obtain_file_path(self, paths, attached_file):
+        try:
+            file_path = paths[attached_file.name]['path']
+        except KeyError:
+            file_path = attached_file.name
+
+        return file_path
 
 
 class TreebankSerializer(serializers.ModelSerializer):

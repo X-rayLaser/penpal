@@ -7,6 +7,7 @@ import uuid
 import traceback
 from celery import shared_task
 import redis
+from pypdf import PdfReader
 from django.core.files.base import ContentFile
 from django.conf import settings
 import llm_utils
@@ -80,7 +81,7 @@ def parse_attachment(attachment):
 
     allowed_text_files = ['.txt', '.py', '.rb', '.sh', '.cpp', '.c', '.hpp', '.h', '.js', '.html', '.css', '.ts', '.csv']
 
-    # todo: support pdf, csv and other document files
+    # todo: support other document files
     content = ''
     _, extension = os.path.splitext(name)
     extension = extension.lower()
@@ -90,7 +91,13 @@ def parse_attachment(attachment):
     elif extension in ['.xls']:
         print("Excel files are not supported. Ignoring", name)
     elif extension == '.pdf':
-        print("PDF files are not supported. Ignoring", name)
+        reader = PdfReader(attachment.file.path)
+        number_of_pages = len(reader.pages)
+        content = ""
+
+        for i in range(number_of_pages):
+            page = reader.pages[i]
+            content += page.extract_text()
     else:
         print(f"Files with extension '{extension}' are not supported. Ignoring")
 
@@ -322,6 +329,9 @@ def get_last_message(generation_spec):
 
 
 def process_attachments(message):
+    if message.attachments_text:
+        return
+
     attachments_text = ""
     for attachment in message.attachments.all():
         try:

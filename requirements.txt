@@ -9,3 +9,4 @@ websockets
 django-allauth
 olefile
 bleach
+pypdf
