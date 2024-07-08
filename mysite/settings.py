@@ -33,4 +33,7 @@ STT_BACKEND = {
     "class": "stt.backends.NullSpeechToTextBackend"
 }
 
-from mysite.local_settings import *
+try:
+    from mysite.local_settings import *
+except ModuleNotFoundError:
+    print("No module mysite.local_settings.py found")
