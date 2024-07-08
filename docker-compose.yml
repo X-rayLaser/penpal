@@ -1,0 +1,58 @@
+version: "3.8"
+services:
+  webapp:
+    build:
+      context: .
+      dockerfile: ./docker/webapp.Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      ENV: DEV
+    volumes:
+      - .:/app
+      - db_data:/data
+      - secrets:/secrets
+      - assets:/app/frontend/public
+    links:
+      - redis
+
+  celery:
+    build:
+      context: .
+      dockerfile: ./docker/webapp.Dockerfile
+    volumes:
+      - ./:/app
+      - secrets:/secrets
+      - db_data:/data
+    links:
+      - redis
+    command: celery -A mysite worker -l INFO
+
+  websocketserver:
+    build:
+      context: .
+      dockerfile: ./docker/webapp.Dockerfile
+    volumes:
+      - ./:/app
+    links:
+      - redis
+    ports:
+      - "9000:9000"
+    command: python3 -u websocket_server.py --redis-host redis
+
+  redis:
+    image: redis
+
+  webpack:
+    build:
+      context: .
+      dockerfile: ./docker/webapp.Dockerfile
+    volumes:
+      - ./frontend/src/:/app/frontend/src
+      - assets:/app/frontend/public
+    command: scripts/build_assets.sh
+
+volumes:
+  db_data:
+  assets:
+  secrets:

@@ -26,17 +26,11 @@ To get started with our application, follow these steps to install it on your lo
 
 ## Prerequisites
 
-1. Install Node.js: Follow the official instructions for your operating system.
+1. Docker engine or docker desktop
 
-2. Install Python: If you haven't already, follow the official instructions to download and install Python 3.x.
-
-3. Install pipenv if you don't have it yet:
-```
-pip install --user pipenv 
-```
+2. docker-compose
 
 ## Actual installation
-
 
 To get started, clone the repository:
 
@@ -45,50 +39,29 @@ git clone https://github.com/X-rayLaser/penpal.git
 cd penpal
 ```
 
-Create a new virtual environment using the command:
+Build docker image(s):
 ```
-python -m venv myvenv
-```
-
-Activate it with (on linux):
-```
-source myvenv/bin/activate
+docker-compose build
 ```
 
-On Windows, use:
+Generate a secret key by executing the command below:
 ```
-myvenv\Scripts\activate
-```
-
-Install Python dependencies using pip:
-```
-pip install -r requirements.txt
-```
-
-Install javascript dependencies:
-```
-npm install
-```
-
-Create a secrets.py file in the mysite directory and add your secret key:
-
-```
-SECRET_KEY = 'your-secret-key'
-```
-
-You can generate the key with a command:
-```
-python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
-```
-
-Build frontend code
-```
-npx webpack --config webpack.config.js
+chmod +x scripts/generate_key.sh && docker-compose run --no-deps webapp scripts/generate_key.sh
 ```
 
 Apply django migrations
 ```
-python manage.py migrate
+docker-compose run --no-deps webapp python manage.py migrate
+```
+
+Run the app:
+```
+docker-compose up
+```
+
+Stop the app (when launched with -d flag):
+```
+docker-compose stop
 ```
 
 # Getting Started

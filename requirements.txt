@@ -4,7 +4,7 @@ djangorestframework
 markdown
 huggingface_hub
 music21
-celery
+celery[redis]
 websockets
 django-allauth
 olefile

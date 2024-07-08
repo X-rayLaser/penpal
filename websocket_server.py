@@ -3,13 +3,12 @@ import json
 import argparse
 import websockets
 import redis.asyncio as redis
+import os
 
 STOPWORD = "[|END_OF_STREAM|]"
 TOKEN_STREAM = "token_stream"
 SPEECH_STREAM = "speech_stream"
 STOP_SPEECH = "[|END_OF_SPEECH|]"
-
-r = redis.from_url("redis://localhost")
 
 
 async def handler(websocket):
@@ -62,7 +61,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Start websockets server")
     parser.add_argument("--host", type=str, default="0.0.0.0")
     parser.add_argument("--port", type=int, default=9000)
-
+    parser.add_argument("--redis-host", type=str, default="localhost")
     args = parser.parse_args()
+
+    redis_host = args.redis_host
+    print("REDIS_HOST", redis_host)
+
+    redis_host = "redis"
+
+    r = redis.from_url(f"redis://{redis_host}")
 
     asyncio.run(main(args.host, args.port))

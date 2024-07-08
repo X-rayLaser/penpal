@@ -1,0 +1,16 @@
+*.pyc
+*.log
+*.sqlite3
+docker-compose.yml
+docker/
+.git/
+venv/
+.vagrant/
+node_modules/
+Vagrantfile
+package-lock.json
+llama.cpp/
+test_data/
+installed_models
+media/
+mysite/secrets.py

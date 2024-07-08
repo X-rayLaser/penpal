@@ -64,6 +64,8 @@ class Consumer(threading.Thread):
             except Exception as e:
                 url = None
                 sample_id = None
+                import traceback
+                traceback.print_exc()
             else:
                 url = sample.get_absolute_url()
                 sample_id = sample.pk
@@ -405,7 +407,7 @@ def generate_response_message(generation_spec_dict, socket_session_id, redis_obj
 @shared_task
 def generate_llm_response(generation_spec_dict, socket_session_id):
     token_channel = f'{TOKEN_STREAM}:{socket_session_id}'
-    redis_object = redis.Redis()
+    redis_object = redis.Redis(settings.REDIS_HOST)
 
     try:
         generate_response_message(generation_spec_dict, socket_session_id, redis_object)
