@@ -39,6 +39,11 @@ git clone https://github.com/X-rayLaser/penpal.git
 cd penpal
 ```
 
+Make the script below executable:
+```
+chmod +x scripts/build_assets.sh
+```
+
 Build docker image(s):
 ```
 docker-compose build
@@ -46,7 +51,7 @@ docker-compose build
 
 Generate a secret key by executing the command below:
 ```
-chmod +x scripts/generate_key.sh && docker-compose run --no-deps webapp scripts/generate_key.sh
+docker-compose run --no-deps webapp python scripts/generate_key.py
 ```
 
 Apply django migrations
