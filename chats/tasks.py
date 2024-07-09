@@ -31,13 +31,20 @@ STOP_SPEECH = "[|END_OF_SPEECH|]"
 
 def synthesize_speech(text):
     speech_data = tts.tts_backend(text)
+    if not speech_data:
+        raise NoSpeechSampleError()
+    
     sample = SpeechSample()
-    if speech_data:
-        audio_file = ContentFile(speech_data, name="tts-audio-file.wav")
-        sample.audio = audio_file
-        sample.text = text
-        sample.save()
+    audio_file = ContentFile(speech_data, name="tts-audio-file.wav")
+    sample.audio = audio_file
+    sample.text = text
+    sample.save()
+
     return sample
+
+
+class NoSpeechSampleError(Exception):
+    pass
 
 
 class Consumer(threading.Thread):
@@ -56,7 +63,6 @@ class Consumer(threading.Thread):
                 self.queue.task_done()
                 break
 
-            
             t0 = time.time()
             try:
                 sample = synthesize_speech(sentence)
@@ -64,7 +70,6 @@ class Consumer(threading.Thread):
             except Exception as e:
                 url = None
                 sample_id = None
-                import traceback
                 traceback.print_exc()
             else:
                 url = sample.get_absolute_url()
