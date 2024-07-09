@@ -7,6 +7,10 @@ DEBUG = False
 
 ALLOWED_HOSTS = ['localhost']
 
+host_address = os.environ.get('SERVER_IP_ADDRESS')
+if host_address:
+    ALLOWED_HOSTS = [host_address]
+
 llm_host = os.environ.get('LLM_HOST', "localhost")
 stt_host = os.environ.get('STT_HOST', llm_host)
 tts_host = os.environ.get('TTS_HOST', llm_host)

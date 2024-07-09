@@ -38,6 +38,16 @@ services:
       - "9000:9000"
     command: python3 -u websocket_server.py --redis-host redis
 
+  nginx:
+    image: nginx
+    depends_on:
+      - webapp
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - db_data:/data
+
   redis:
     image: redis
 
