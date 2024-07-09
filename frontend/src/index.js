@@ -116,8 +116,10 @@ class App extends React.Component {
     }
 }
 
+const hostWithPort = window.location.host;
+const host = window.location.hostname || (hostWithPort && hostWithPort.split(":")[0]);
 
-const socket = new WebSocket("ws://localhost:9000");
+const socket = new WebSocket(`ws://${host}:9000`);
 
 function getRandomInt(max) {
     return Math.floor(Math.random() * max);

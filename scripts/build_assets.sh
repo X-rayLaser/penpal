@@ -1,4 +1,4 @@
 #!/bin/bash
 
 . /home/user/.profile
-npx webpack
+npx webpack --watch --config webpack.config.js
