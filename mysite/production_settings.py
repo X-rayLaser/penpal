@@ -21,6 +21,15 @@ tts_port = os.environ.get('TTS_PORT', stt_port + 100)
 
 proxies = {}
 
+http_proxy = os.environ.get('HTTP_PROXY_SERVER_ADDRESS')
+https_proxy = os.environ.get('HTTPS_PROXY_SERVER_ADDRESS', http_proxy)
+
+if http_proxy:
+    proxies['http'] = http_proxy
+
+if https_proxy:
+    proxies['https'] = https_proxy
+
 LLM_SETTINGS = {
     "generator": {
         "class": "llm_utils.generators.ManagedRemoteLLM",

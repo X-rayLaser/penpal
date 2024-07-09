@@ -2,6 +2,7 @@
 venv/
 mysite/secrets.py
 mysite/local_settings.py
+webapp.env
 *.sqlite3
 \.vagrant
 node_modules/
