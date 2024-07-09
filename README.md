@@ -39,9 +39,10 @@ git clone https://github.com/X-rayLaser/penpal.git
 cd penpal
 ```
 
-Make the script below executable:
+Make the bash scripts below executable:
 ```
 chmod +x scripts/build_assets.sh
+chmod +x scripts/run_django_server.sh
 ```
 
 Build docker image(s):

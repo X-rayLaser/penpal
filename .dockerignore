@@ -2,6 +2,7 @@
 *.log
 *.sqlite3
 docker-compose.yml
+docker-compose.production.yml
 docker/
 .git/
 venv/

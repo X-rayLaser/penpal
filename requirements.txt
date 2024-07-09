@@ -10,3 +10,5 @@ django-allauth
 olefile
 bleach
 pypdf
+gunicorn
+whitenoise

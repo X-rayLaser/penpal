@@ -23,12 +23,14 @@ WORKDIR /app
 
 RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash && . ~/.profile && nvm install 20
 
-RUN . ~/.profile && npm install && npx webpack
+RUN . ~/.profile && npm install && npx webpack --mode production
 
 # creating directories in advance will allow to create volumes with mount points at their place
 # with correct ownership (will by ownbed by user)
 RUN mkdir -p /app/frontend/public
 
+RUN python manage.py collectstatic
+
 SHELL ["/bin/bash", "-l", "-c"]
 
-CMD ["python3", "manage.py", "runserver", "0.0.0.0:8000"]
+CMD ["scripts/run_django_server.sh"]

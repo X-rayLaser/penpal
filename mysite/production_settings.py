@@ -1,9 +1,11 @@
 import os
 from mysite.base_settings import *
 
+print("LOADED PRODUCTION SETTINGS FILE!")
+
 DEBUG = False
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['localhost']
 
 llm_host = os.environ.get('LLM_HOST', "localhost")
 stt_host = os.environ.get('STT_HOST', llm_host)

@@ -7,9 +7,8 @@ services:
     ports:
       - "8000:8000"
     environment:
-      ENV: DEV
+      ENV: PROD
     volumes:
-      - .:/app
       - db_data:/data
       - secrets:/secrets
       - assets:/app/frontend/public
@@ -21,9 +20,8 @@ services:
       context: .
       dockerfile: ./docker/webapp.Dockerfile
     environment:
-      ENV: DEV
+      ENV: PROD
     volumes:
-      - ./:/app
       - secrets:/secrets
       - db_data:/data
     links:
@@ -34,8 +32,6 @@ services:
     build:
       context: .
       dockerfile: ./docker/webapp.Dockerfile
-    volumes:
-      - ./:/app
     links:
       - redis
     ports:
@@ -45,17 +41,7 @@ services:
   redis:
     image: redis
 
-  webpack:
-    build:
-      context: .
-      dockerfile: ./docker/webapp.Dockerfile
-    volumes:
-      - ./frontend/src/:/app/frontend/src
-      - assets:/app/frontend/public
-    command: scripts/build_assets.sh
-
 volumes:
   db_data:
   assets:
   secrets:
-  
