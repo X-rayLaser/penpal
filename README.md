@@ -39,6 +39,12 @@ git clone https://github.com/X-rayLaser/penpal.git
 cd penpal
 ```
 
+Create webapp.env file storing environment variables used by app containers:
+```
+LLM_HOST=<IP address of your LLM server>
+LLM_PORT=<Port on which LLM server is listening>
+```
+
 Make the bash scripts below executable:
 ```
 chmod +x scripts/build_assets.sh
@@ -47,27 +53,27 @@ chmod +x scripts/run_django_server.sh
 
 Build docker image(s):
 ```
-docker-compose build
+docker-compose -f docker-compose.production.yml build
 ```
 
 Generate a secret key by executing the command below:
 ```
-docker-compose run --no-deps webapp python scripts/generate_key.py
+docker-compose -f docker-compose.production.yml run --no-deps webapp python scripts/generate_key.py
 ```
 
 Apply django migrations
 ```
-docker-compose run --no-deps webapp python manage.py migrate
+docker-compose -f docker-compose.production.yml run --no-deps webapp python manage.py migrate
 ```
 
 Run the app:
 ```
-docker-compose up
+docker-compose -f docker-compose.production.yml up
 ```
 
 Stop the app (when launched with -d flag):
 ```
-docker-compose stop
+docker-compose -f docker-compose.production.yml stop
 ```
 
 # Getting Started

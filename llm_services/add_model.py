@@ -14,7 +14,8 @@ if __name__ == '__main__':
     )
 
     parser.add_argument("model_id", type=str)
-    parser.add_argument('model_path', type=str)
+    parser.add_argument("model_path", type=str)
+    parser.add_argument("--yes", type=bool, default=False)
     args = parser.parse_args()
 
     source = args.model_path
@@ -23,7 +24,7 @@ if __name__ == '__main__':
 
     destination = os.path.join(models_root, file_name)
 
-    if os.path.exists(models_root):
+    if os.path.exists(models_root) and not args.yes:
         yesno = input(f"Writing file(s) to existing folder '{models_root}'. Continue? (y/n)")
         if yesno != "y":
             sys.exit(0)
