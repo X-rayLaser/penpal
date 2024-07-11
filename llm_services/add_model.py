@@ -15,7 +15,7 @@ if __name__ == '__main__':
 
     parser.add_argument("model_id", type=str)
     parser.add_argument("model_path", type=str)
-    parser.add_argument("--yes", type=bool, default=False)
+    parser.add_argument("--yes", action='store_true')
     args = parser.parse_args()
 
     source = args.model_path
