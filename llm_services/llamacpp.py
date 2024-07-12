@@ -457,9 +457,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", type=str, default="0.0.0.0")
     parser.add_argument("--port", type=int, default=9000)
+    parser.add_argument("--llama-server", type=str, default="./llama.cpp/llama-server")
     args = parser.parse_args()
 
-    llm_manager.setup(exec_path="./llama.cpp/server",
+    llm_manager.setup(exec_path=args.llama_server,
                       host="localhost",
                       port=9500)
 

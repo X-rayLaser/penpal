@@ -42,7 +42,8 @@ cd penpal
 Create webapp.env file storing environment variables used by app containers:
 ```
 LLM_HOST=<IP address of your LLM server>
-LLM_PORT=<Port on which LLM server is listening>
+LLM_PORT=<Port on which LLM server is listening> # 9100 by default
+SERVER_IP_ADDRESS=<IP address of your web app server> # localhost by default
 ```
 
 Make the bash scripts below executable:
