@@ -27,23 +27,23 @@ http {
     #server unix:/tmp/gunicorn.sock fail_timeout=0;
 
     # for a TCP configuration
-    server webapp:8000 fail_timeout=0;
+    server ${NGINX_APP_SERVER_NAME}:${NGINX_APP_SERVER_PORT} fail_timeout=0;
   }
 
   server {
     # if no Host match, close the connection to prevent host spoofing
-    listen 80 default_server;
+    listen ${NGINX_PORT} default_server;
     return 444;
   }
 
   server {
     # use 'listen 80 deferred;' for Linux
     # use 'listen 80 accept_filter=httpready;' for FreeBSD
-    listen 80;
+    listen ${NGINX_PORT};
     client_max_body_size 4G;
 
     # set the correct host(s) for your site
-    server_name localhost;
+    server_name ${NGINX_HOST};
 
     keepalive_timeout 5;
 

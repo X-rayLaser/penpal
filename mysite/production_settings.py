@@ -5,11 +5,11 @@ print("LOADED PRODUCTION SETTINGS FILE!")
 
 DEBUG = False
 
-ALLOWED_HOSTS = ['localhost']
+ALLOWED_HOSTS = []
 
-host_address = os.environ.get('SERVER_IP_ADDRESS')
-if host_address:
-    ALLOWED_HOSTS = [host_address]
+host = os.environ.get('NGINX_HOST', 'localhost')
+if host:
+    ALLOWED_HOSTS = [host]
 
 llm_host = os.environ.get('LLM_HOST', "localhost")
 stt_host = os.environ.get('STT_HOST', llm_host)
