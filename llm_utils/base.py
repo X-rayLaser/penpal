@@ -38,6 +38,7 @@ class GenerationSpec:
     clear_context: bool
     parent_message_id: int
     image_b64: str = ''
+    voice_id: str = ''
 
     def to_dict(self):
         return self.__dict__

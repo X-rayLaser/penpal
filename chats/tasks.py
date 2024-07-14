@@ -29,8 +29,8 @@ STOPWORD = "[|END_OF_STREAM|]"
 STOP_SPEECH = "[|END_OF_SPEECH|]"
 
 
-def synthesize_speech(text):
-    speech_data = tts.tts_backend(text)
+def synthesize_speech(text, voice_id):
+    speech_data = tts.tts_backend.synthesize(text, voice_id)
     if not speech_data:
         raise NoSpeechSampleError()
     
@@ -48,24 +48,25 @@ class NoSpeechSampleError(Exception):
 
 
 class Consumer(threading.Thread):
-    def __init__(self, queue, redis_bus, socket_session_id):
+    def __init__(self, queue, redis_bus, socket_session_id, voice_id):
         super().__init__()
         self.queue = queue
         self.redis_bus = redis_bus
         self.session_id = socket_session_id
+        self.voice_id = voice_id
         self.samples = []
 
     def run(self):
         speech_channel = f'{SPEECH_CHANNEL}:{self.session_id}'
         while True:
             sentence = self.queue.get()
-            if sentence == '':
+            if sentence == '' or not self.voice_id:
                 self.queue.task_done()
                 break
 
             t0 = time.time()
             try:
-                sample = synthesize_speech(sentence)
+                sample = synthesize_speech(sentence, self.voice_id)
                 self.samples.append(sample)
             except Exception as e:
                 url = None
@@ -384,7 +385,7 @@ def generate_response_message(generation_spec_dict, socket_session_id, redis_obj
 
     queue = Queue()
 
-    consumer = Consumer(queue, redis_object, socket_session_id)
+    consumer = Consumer(queue, redis_object, socket_session_id, generation_spec.voice_id)
     consumer.start()
 
     producer = Producer(queue, redis_object, token_channel, chat_renderer_cls)

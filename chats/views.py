@@ -88,6 +88,7 @@ def _generate_completion(request):
     clear_context = body.get("clear_context", False)
     socket_session_id = body.get("socketSessionId")
     image_b64 = body.get("image_data_uri")
+    voice_id = body.get("voice_id")
 
     parent_message_id = int(body.get("parent", -1))
 
@@ -99,7 +100,8 @@ def _generate_completion(request):
         sampling_config=llm_settings,
         clear_context=clear_context,
         image_b64=image_data,
-        parent_message_id=parent_message_id
+        parent_message_id=parent_message_id,
+        voice_id=voice_id
     )
 
     celery_task = generate_llm_response.delay(spec.to_dict(), socket_session_id)
@@ -233,6 +235,12 @@ def message_detail(request, pk):
 def supported_tools(request):
     tools = [tool.lower() for tool in llm_tools.keys()]
     return Response(tools)
+
+
+@api_view(['get'])
+def list_voices(request):
+    voices = tts_backend.list_voices()
+    return Response(voices)
 
 
 @api_view(['GET'])

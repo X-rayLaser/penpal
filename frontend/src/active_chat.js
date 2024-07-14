@@ -272,6 +272,7 @@ class ActiveChat extends React.Component {
             prompt: "",
             system_message: "",
             configuration: null,
+            voice_id: "",
             chatTree: {
                 children: []
             },
@@ -358,11 +359,13 @@ class ActiveChat extends React.Component {
             let config = data.configuration_ro;
             let tools = (config && config.tools) || [];
             let system_message = data.system_message || (config && config.system_message_ro && config.system_message_ro.text) || "";
+            let voice_id = (config && config.voice_id) || "";
 
             this.setState({
                 system_message,
                 configuration: config,
-                tools
+                tools,
+                voice_id
             });
 
             let preset = config.preset_ro;
@@ -569,11 +572,14 @@ class ActiveChat extends React.Component {
             launch_params: this.state.configuration.launch_params
         };
 
+        let voice_id = this.state.voice_id;
+
         let committedText = "";
         
         let streamer = new WebsocketResponseStreamer('/chats/generate_reply/', 'POST', this.props.websocket);
+        
         let completionGenerator = new ToolAugmentedCompletionGenerator(
-            inferenceConfig, llmSettings, leaf.id, streamer, this.props.socketSessionId
+            inferenceConfig, llmSettings, leaf.id, streamer, this.props.socketSessionId, voice_id
         );
 
         completionGenerator.onChunk = (chunk) => {

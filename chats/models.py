@@ -68,6 +68,8 @@ class Configuration(models.Model):
 
     template_spec = models.JSONField(blank=True, null=True)
 
+    voice_id = models.CharField(max_length=500, blank=True, null=True)
+
     def __str__(self):
         return self.name
 

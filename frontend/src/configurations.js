@@ -108,6 +108,25 @@ class SystemMessageSelectionWidget extends BaseSelectionWidget {
     }
 }
 
+class VoiceSelectionWidget extends BaseSelectionWidget {
+    constructor(props) {
+        super(props);
+        this.selectionLabel = "Voice sample id";
+        this.selectionId = "voice_id_select"
+        this.ariaLabel = this.selectionLabel + " selection";
+        this.blankOptionText = "--No voice ids--";
+    }
+    renderDetail(item) {
+        return (
+            <div></div>
+        );
+    }
+
+    getName(item) {
+        return item;
+    }
+}
+
 
 class RepositorySelectionWidget extends BaseSelectionWidget {
     constructor(props) {
@@ -398,10 +417,12 @@ class NewConfigurationForm extends React.Component {
             selectedModelFile: "",
             selectedMMprojectorRepo: "",
             selectedMMprojectorModelFile: "",
+            selectedVoiceId: "",
             launchConfig: ModelLaunchConfig.defaultLaunchParams,
             repos: [],
             modelFiles: [],
             projectorFiles: [],
+            voices: [],
             installedModels: {}, // repository -> model_file mapping
             systemMessages: [],
             selectedMessageName: "",
@@ -429,6 +450,8 @@ class NewConfigurationForm extends React.Component {
 
         this.handleProjectorRepoChange = this.handleProjectorRepoChange.bind(this);
         this.handleProjectorModelChange = this.handleProjectorModelChange.bind(this);
+
+        this.handleVoiceChange = this.handleVoiceChange.bind(this);
     }
 
     componentDidMount() {
@@ -461,6 +484,10 @@ class NewConfigurationForm extends React.Component {
                 nameToPreset,
                 loadingPresets: false
             })
+        });
+
+        fetcher.performFetch('/chats/list-voices/').then(voices => {
+            this.setState({ voices });
         });
 
         fetcher.performFetch('/chats/supported-tools/').then(data => {
@@ -556,6 +583,10 @@ class NewConfigurationForm extends React.Component {
         };
     }
 
+    handleVoiceChange(selectedVoiceId) {
+        this.setState({ selectedVoiceId });
+    }
+
     handleModelFileChange(selectedModelFile) {
         this.setState({ selectedModelFile });
     }
@@ -597,7 +628,8 @@ class NewConfigurationForm extends React.Component {
             launch_params: this.state.launchConfig,
             preset: preset.id,
             tools: this.state.tools,
-            template_spec: this.state.chatTemplate
+            template_spec: this.state.chatTemplate,
+            voice_id: this.state.selectedVoiceId
         };
 
         if (this.state.selectedMessageName) {
@@ -714,6 +746,12 @@ class NewConfigurationForm extends React.Component {
                     <PresetSelectionWidget items={this.state.presets}
                                            selectedName={this.state.selectedPresetName}
                                            onChange={this.handlePresetChange} />
+                </div>
+
+                <div className="mb-3">
+                    <VoiceSelectionWidget items={this.state.voices}
+                                          selectedName={this.state.selectedVoiceId}
+                                          onChange={this.handleVoiceChange} />
                 </div>
 
                 <Form.Group className="mb-3">

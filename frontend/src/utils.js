@@ -23,7 +23,7 @@ export const withRouter = WrappedComponent => props => {
 
 
 export class SimpleTextCompletionGenerator {
-    constructor(inferenceConfig, llmSettings, leafId, tokenStreamer, socketSessionId) {
+    constructor(inferenceConfig, llmSettings, leafId, tokenStreamer, socketSessionId, voice_id) {
         this.inferenceConfig = inferenceConfig;
         this.llmSettings = llmSettings;
         this.leafId = leafId;
@@ -31,6 +31,7 @@ export class SimpleTextCompletionGenerator {
         this.onPaused = textSegment => {};
         this.streamer = tokenStreamer;
         this.socketSessionId = socketSessionId;
+        this.voice_id = voice_id;
 
         if (!this.streamer) {
             this.streamer = new JsonResponseStreamer('/chats/generate_reply/', 'POST');
@@ -62,7 +63,8 @@ export class SimpleTextCompletionGenerator {
             clear_context: true,
             llm_settings: this.llmSettings,
             parent: this.leafId,
-            socketSessionId: this.socketSessionId
+            socketSessionId: this.socketSessionId,
+            voice_id: this.voice_id
         };
     }
 }

@@ -5,8 +5,6 @@ services:
       context: .
       dockerfile: ./docker/webapp.Dockerfile
     env_file: "webapp.env"
-    ports:
-      - "8000:8000"
     environment:
       ENV: PROD
     volumes:

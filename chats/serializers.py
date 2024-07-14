@@ -36,7 +36,7 @@ class ConfigurationSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'model_repo',
                   'file_name', 'launch_params', 'system_message',
                   'system_message_ro', 'preset', 'preset_ro', 
-                  'tools', 'template_spec']
+                  'tools', 'template_spec', 'voice_id']
 
     def update(self, instance, validated_data):
         # todo: consider other approaches
