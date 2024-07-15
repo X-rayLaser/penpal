@@ -118,12 +118,20 @@ class VoiceSelectionWidget extends BaseSelectionWidget {
     }
     renderDetail(item) {
         return (
-            <div></div>
+            <div>
+                <div className="mt-2 mb-2">
+                    Listen to the chosen voice sample for {item.voice_id}:
+                </div>
+                <audio controls>
+                    <source src={item.url} type="audio/wav" />
+                    Your browser does not support the audio element.
+                </audio>
+            </div>
         );
     }
 
     getName(item) {
-        return item;
+        return item.voice_id;
     }
 }
 

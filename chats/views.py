@@ -8,7 +8,7 @@ import imghdr
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from rest_framework import viewsets, generics
+from rest_framework import viewsets, generics, views
 from rest_framework.parsers import BaseParser
 from rest_framework.decorators import parser_classes
 from rest_framework.renderers import BaseRenderer
@@ -53,8 +53,16 @@ class BinaryRenderer(BaseRenderer):
 
     def render(self, data, media_type=None, renderer_context=None):
         view = renderer_context['view']
+
         with open(view.get_object().audio.path, 'rb') as f:
             return f.read()
+
+
+class AudioVerbatimRenderer(BinaryRenderer):
+    media_type = 'audio/*'
+
+    def render(self, data, media_type=None, renderer_context=None):
+        return data
 
 
 class SystemMessageViewSet(viewsets.ModelViewSet):
@@ -79,6 +87,15 @@ class SpeechSampleViewSet(viewsets.ReadOnlyModelViewSet):
 
     def retrieve(self, request, *args, **kwargs):
         return super().retrieve(request, *args, **kwargs)
+
+
+class VoiceSampleView(views.APIView):
+    renderer_classes = [AudioVerbatimRenderer]
+
+    def get(self, request):
+        voice_id = request.query_params['voice_id']
+        content = tts_backend.get_voice_sample(voice_id)
+        return Response(content)
 
 
 def _generate_completion(request):

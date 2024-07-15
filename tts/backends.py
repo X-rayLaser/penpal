@@ -9,6 +9,9 @@ class BaseTtsBackend:
     def list_voices(self):
         return []
 
+    def get_voice_sample(self, relative_url):
+        return None
+
 
 class NullTtsBackend(BaseTtsBackend):
     pass
@@ -24,7 +27,12 @@ class DummyTtsBackend(BaseTtsBackend):
         return data        
 
     def list_voices(self):
-        return ["Voice 1", "Voice 2", "Voice 3"]
+        return [{"voice_id": "Voice 1", "url": ""},
+                {"voice_id": "Voice 2", "url": ""},
+                {"voice_id": "Voice 3", "url": ""}]
+
+    def get_voice_sample(self, relative_url):
+        return self.synthesize(None, None)
 
 
 class RemoteTtsBackend(BaseTtsBackend):
@@ -54,8 +62,16 @@ class RemoteTtsBackend(BaseTtsBackend):
 
         return audio
 
+    def get_voice_sample(self, voice_id):
+        path = f'/voice-sample/?voice_id={voice_id}'
+        return self.make_request(path).content
+
     def list_voices(self):
-        resp = self.make_request(self.voices_endpoint)
+        try:
+            resp = self.make_request(self.voices_endpoint)
+        except requests.exceptions.ConnectionError:
+            return []
+
         if resp.status_code == 200:
             return resp.json()
         return []

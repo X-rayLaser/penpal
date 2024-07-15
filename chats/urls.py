@@ -21,7 +21,8 @@ urlpatterns = [
     path('messages/<int:pk>/', views.message_detail),
     path('tools-spec/', views.tools_specification),
     path('supported-tools/', views.supported_tools),
-    path('list-voices/', views.list_voices)
+    path('list-voices/', views.list_voices),
+    path('voice-sample/', views.VoiceSampleView.as_view())
 ]
 
 urlpatterns += router.urls
