@@ -57,8 +57,7 @@ class RemoteTtsBackend(BaseTtsBackend):
     def list_voices(self):
         resp = self.make_request(self.voices_endpoint)
         if resp.status_code == 200:
-            json_str = resp.json()
-            return json.loads(json_str)
+            return resp.json()
         return []
 
     def make_request(self, endpoint, method=None, data=None):

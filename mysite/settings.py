@@ -23,9 +23,13 @@ LLM_SETTINGS = {
     }
 }
 
-
 TTS_BACKEND = {
-    "class": "tts.backends.NullTtsBackend"
+    "class": "tts.backends.RemoteTtsBackend",
+    "kwargs": {
+        "host": "tts_mock",
+        "port": 9300,
+        "use_tls": False
+    }
 }
 
 

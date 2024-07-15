@@ -54,6 +54,13 @@ services:
       - assets:/app/frontend/public
     command: scripts/build_assets.sh
 
+  tts_mock:
+    build:
+      context: .
+      dockerfile: ./docker/tts_mock.Dockerfile
+    volumes:
+      - ./tts_server_mock:/tts_server_mock
+
 volumes:
   db_data:
   assets:
