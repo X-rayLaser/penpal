@@ -17,3 +17,4 @@ installed_models
 test_data/
 media/
 tts_server_mock/samples
+chrome-linux64/

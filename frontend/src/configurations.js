@@ -210,7 +210,7 @@ class PresetSelectionWidget extends BaseSelectionWidget {
         this.selectionLabel = "Preset";
         this.selectionId = "preset_select"
         this.ariaLabel = this.selectionLabel + " selection";
-
+        this.blankOptionText = "--No system message--";
         this.state = {
             open: false,
             buttonText: "Show preset settings"
@@ -488,7 +488,7 @@ class NewConfigurationForm extends React.Component {
 
             this.setState({
                 presets: data,
-                selectedPresetName: data[0].name,
+                selectedPresetName: "",
                 nameToPreset,
                 loadingPresets: false
             })
@@ -634,11 +634,14 @@ class NewConfigurationForm extends React.Component {
             model_repo: this.state.selectedRepo,
             file_name: this.state.selectedModelFile,
             launch_params: this.state.launchConfig,
-            preset: preset.id,
             tools: this.state.tools,
             template_spec: this.state.chatTemplate,
             voice_id: this.state.selectedVoiceId
         };
+
+        if (preset) {
+            data.preset = preset.id;
+        }
 
         if (this.state.selectedMessageName) {
             let message = this.state.nameToMessage[this.state.selectedMessageName];
@@ -801,17 +804,20 @@ class ConfigurationsPage extends ItemListWithForm {
     }
 
     renderItem(item, index, handleDeleteItem) {
-        let preset = {
-            name: item.preset_ro.name,
-            settings: {
-                temperature: item.preset_ro.temperature,
-                topK: item.preset_ro.top_k,
-                topP: item.preset_ro.top_p,
-                minP: item.preset_ro.min_p,
-                repeatPenalty: item.preset_ro.repeat_penalty,
-                nPredict: item.preset_ro.n_predict
-            }
-        };
+        let preset = null;
+        if (item.preset_ro) {
+            preset = {
+                name: item.preset_ro.name,
+                settings: {
+                    temperature: item.preset_ro.temperature,
+                    topK: item.preset_ro.top_k,
+                    topP: item.preset_ro.top_p,
+                    minP: item.preset_ro.min_p,
+                    repeatPenalty: item.preset_ro.repeat_penalty,
+                    nPredict: item.preset_ro.n_predict
+                }
+            };
+        }
 
         let tools = item.tools.map((name, index) => {
             return (
@@ -835,12 +841,14 @@ class ConfigurationsPage extends ItemListWithForm {
                                 <Accordion.Body>{item.system_message_ro.text}</Accordion.Body>
                             </Accordion.Item>
                         )}
-                        <Accordion.Item eventKey="1">
-                            <Accordion.Header>Generation preset: {preset.name}</Accordion.Header>
-                            <Accordion.Body>
-                                <Preset preset={preset} />
-                            </Accordion.Body>
-                        </Accordion.Item>
+                        {item.preset && (
+                            <Accordion.Item eventKey="1">
+                                <Accordion.Header>Generation preset: {preset.name}</Accordion.Header>
+                                <Accordion.Body>
+                                    <Preset preset={preset} />
+                                </Accordion.Body>
+                            </Accordion.Item>
+                        )}
                         <Accordion.Item eventKey="2">
                             <Accordion.Header>Model launch parameters</Accordion.Header>
                             <Accordion.Body>

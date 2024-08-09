@@ -4,12 +4,19 @@ from celery import Celery
 
 # Set the default Django settings module for the 'celery' program.
 
-development_mode = (os.environ.get('ENV') == 'DEV')
+env = os.environ.get('ENV')
+development_mode = (env == 'DEV')
+test_mode = (env == 'TEST')
+print('environment', env)
 if development_mode:
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'mysite.settings')
+elif test_mode:
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'mysite.test_settings')
 else:
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'mysite.production_settings')
 
+
+print("DJANGO_SETTINGS_MODULE", os.environ.get("DJANGO_SETTINGS_MODULE"))
 app = Celery('mysite')
 
 # Using a string here means the worker doesn't have to serialize

@@ -12,3 +12,4 @@ bleach
 pypdf
 gunicorn
 whitenoise
+behave

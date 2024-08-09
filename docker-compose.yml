@@ -7,7 +7,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      ENV: DEV
+      - ENV=${ENV}
     volumes:
       - .:/app
       - db_data:/data
@@ -21,7 +21,7 @@ services:
       context: .
       dockerfile: ./docker/webapp.Dockerfile
     environment:
-      ENV: DEV
+      - ENV=${ENV}
     volumes:
       - ./:/app
       - secrets:/secrets
