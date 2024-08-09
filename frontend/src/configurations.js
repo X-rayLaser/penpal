@@ -841,7 +841,7 @@ class ConfigurationsPage extends ItemListWithForm {
                                 <Accordion.Body>{item.system_message_ro.text}</Accordion.Body>
                             </Accordion.Item>
                         )}
-                        {item.preset && (
+                        {preset && (
                             <Accordion.Item eventKey="1">
                                 <Accordion.Header>Generation preset: {preset.name}</Accordion.Header>
                                 <Accordion.Body>
