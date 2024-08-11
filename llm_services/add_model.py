@@ -1,7 +1,6 @@
 import argparse
 import os
 import json
-import shutil
 import sys
 
 sys.path.insert(0, ".")
@@ -31,26 +30,19 @@ if __name__ == '__main__':
     else:
         os.makedirs(models_root, exist_ok=True)
 
-    if not os.path.exists(destination):
-        print("Copying gguf file...", end="")
-        shutil.copyfile(source, destination)
-        print("\rDone")
-
-        if not os.path.exists(models_registry):
-            registry = []
-        else:
-            with open(models_registry) as f:
-                registry = json.loads(f.read())
-
-        registry.append({
-            'repo_id': args.model_id,
-            'repo': {},
-            'file_name': file_name,
-            'size': file_size
-        })
-
-        with open(models_registry, 'w') as f:
-            f.write(json.dumps(registry))
-        print("Updated registry")
+    if not os.path.exists(models_registry):
+        registry = []
     else:
-        print(f"File '{destination}' already exists")
+        with open(models_registry) as f:
+            registry = json.loads(f.read())
+
+    registry.append({
+        'repo_id': args.model_id,
+        'repo': {},
+        'file_name': file_name,
+        'size': file_size
+    })
+
+    with open(models_registry, 'w') as f:
+        f.write(json.dumps(registry))
+    print("Updated registry")
