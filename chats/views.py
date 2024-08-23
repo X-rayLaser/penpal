@@ -94,6 +94,14 @@ class PresetViewSet(viewsets.ModelViewSet):
 class ConfigurationViewSet(viewsets.ModelViewSet):
     serializer_class = ConfigurationSerializer
     queryset = Configuration.objects.all()
+    permission_classes = [IsAuthenticated, permissions.IsOwner]
+
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+    def get_queryset(self):
+        return Configuration.objects.filter(user=self.request.user)
 
 
 class SpeechSampleViewSet(viewsets.ReadOnlyModelViewSet):

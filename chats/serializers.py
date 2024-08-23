@@ -33,20 +33,26 @@ class PresetSerializer(serializers.ModelSerializer):
 class ConfigurationSerializer(serializers.ModelSerializer):
     system_message_ro = SystemMessageSerializer(source="system_message", read_only=True)
     preset_ro = PresetSerializer(source="preset", read_only=True)
+    user = serializers.ReadOnlyField(source="user.username")
 
     class Meta:
         model = Configuration
         fields = ['id', 'name', 'model_repo',
                   'file_name', 'launch_params', 'system_message',
                   'system_message_ro', 'preset', 'preset_ro', 
-                  'tools', 'template_spec', 'voice_id']
+                  'tools', 'template_spec', 'voice_id', 'user']
 
     def update(self, instance, validated_data):
         # todo: consider other approaches
-        validated_data.pop('system_message')
-        validated_data.pop('preset')
-        validated_data.pop('tools')
+        self.pop_if_exists(validated_data, 'system_message')
+        self.pop_if_exists(validated_data, 'preset')
+        self.pop_if_exists(validated_data, 'tools')
+
         return super().update(instance, validated_data)
+
+    def pop_if_exists(self, validated_data, field):
+        if field in validated_data:
+            validated_data.pop(field)
 
 
 class ChatSerializer(serializers.ModelSerializer):

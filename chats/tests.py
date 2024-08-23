@@ -1,4 +1,5 @@
 import unittest
+from dataclasses import dataclass
 from django.test import TestCase
 from django.contrib.auth.models import User
 from tools.api_calls import TaggedApiCallBackend, ApiFunctionCall, ApiCallNotFoundError
@@ -80,8 +81,6 @@ class FindApiCallTests(unittest.TestCase):
         self.assertEqual(3, offset)
 
 
-# todo: logged in/logged out, malformed data input, wrong data, adversarial data scenarios
-# todo: check that existing objects do not change
 class ViewSetTestGroup:
     # creation tests
     def test_anonymous_user_cannot_create_object(self):
@@ -92,7 +91,7 @@ class ViewSetTestGroup:
         test = OneObjectCreatedAfterHttpRequest(self.test_context,
                                                 request_data=self.request_data, 
                                                 expected_object_fields=dict(id=1, **self.response_data))
-        test.post(self.list_url, expected_status=201, credentials=self.credentials)
+        test.post(self.list_url, expected_status=201, credentials=self.credentials, content_type='application/json')
 
     def test_logged_in_user_cannot_create_object_with_malformed_data(self):
         test = NoObjectsBeforeAndAfterRequest(self.test_context, request_data=b'mybytes')
@@ -107,16 +106,16 @@ class ViewSetTestGroup:
     # retrieval tests
     def test_anonymous_user_cannot_get_created_object(self):
         test = OneObjectExistsBeforeAndAfterRequest(self.test_context,
-                                                    object_data=dict(user=self.user, **self.request_data))
+                                                    object_data=dict(user=self.user, **self.object_data))
         test.get(url=self.obj_url.format(1), expected_status=403)
 
     def test_logged_in_stranger_cannot_retrieve_other_user_object(self):
         test = OneObjectExistsBeforeAndAfterRequest(self.test_context,
-                                                    object_data=dict(user=self.user, **self.request_data))
+                                                    object_data=dict(user=self.user, **self.object_data))
         test.get(url=self.obj_url.format(1), expected_status=404, credentials=self.stranger_credentials)
 
     def test_logged_in_owner_can_get_created_object(self):
-        object_data = dict(user=self.user, **self.request_data)
+        object_data = dict(user=self.user, **self.object_data)
         test = OneObjectExistsBeforeAndAfterRequest(self.test_context,
                                                     object_data=object_data,
                                                     expected_response=dict(id=1, **self.response_data))
@@ -124,12 +123,12 @@ class ViewSetTestGroup:
 
     def test_cannot_get_non_existing_object(self):
         test = OneObjectExistsBeforeAndAfterRequest(self.test_context,
-                                                    object_data=dict(user=self.user, **self.request_data))
+                                                    object_data=dict(user=self.user, **self.object_data))
         test.get(url=self.obj_url.format(4), expected_status=404, credentials=self.credentials)
 
     def test_anonymous_user_cannot_get_non_existing_object(self):
         test = OneObjectExistsBeforeAndAfterRequest(self.test_context,
-                                                    object_data=dict(user=self.user, **self.request_data))
+                                                    object_data=dict(user=self.user, **self.object_data))
         test.get(url=self.obj_url.format(4), expected_status=403)
 
     def test_no_objects_initially(self):
@@ -138,13 +137,13 @@ class ViewSetTestGroup:
 
     def test_anonymous_user_cannot_list_objects(self):
         test = OneObjectExistsBeforeAndAfterRequest(self.test_context,
-                                                    object_data=dict(user=self.user, **self.request_data))
+                                                    object_data=dict(user=self.user, **self.object_data))
         test.get(self.list_url, expected_status=403)
 
     def test_logged_user_can_only_list_their_objects(self):
         object_data = [
-            dict(user=self.user, **self.request_data),
-            dict(user=self.stranger, **self.alt_data)
+            dict(user=self.user, **self.object_data),
+            dict(user=self.stranger, **self.alt_object_data)
         ]
         test = TwoObjectsExistBeforeAndAfterRequest(self.test_context,
                                                     object_data=object_data,
@@ -152,38 +151,32 @@ class ViewSetTestGroup:
 
         test.get(self.list_url, expected_status=200, credentials=self.credentials)
 
-    def assertObjectHasNotChanged(self, expected_fields, obj):
-        ser = self.serializer_class(instance=obj)
-        self.assertEqual(expected_fields, ser.data)
-
-    # update tests
-
     # deletion tests
     def test_cannot_delete_non_existing_object(self):
         test = OneObjectExistsBeforeAndAfterRequest(self.test_context,
-                                                    object_data=dict(user=self.user, **self.request_data))
+                                                    object_data=dict(user=self.user, **self.object_data))
         test.delete(url=self.obj_url.format(12), credentials=self.credentials, expected_status=404)
 
     def test_anonymous_user_cannot_delete_object(self):
         test = OneObjectExistsBeforeAndAfterRequest(self.test_context,
-                                                    object_data=dict(user=self.user, **self.request_data))
+                                                    object_data=dict(user=self.user, **self.object_data))
         test.delete(url=self.obj_url.format(12), expected_status=403)
 
     def test_owner_can_delete_their_object(self):
         test = OneObjectBeforeRequestNoObjectAfterRequest(self.test_context,
-                                                          object_data=dict(user=self.user, **self.request_data))
+                                                          object_data=dict(user=self.user, **self.object_data))
         test.delete(url=self.obj_url.format(1), credentials=self.credentials, expected_status=204)
 
     def test_stranger_cannot_delete_other_user_objects(self):
         test = OneObjectExistsBeforeAndAfterRequest(self.test_context,
-                                                    object_data=dict(user=self.user, **self.request_data))
+                                                    object_data=dict(user=self.user, **self.object_data))
         test.delete(url=self.obj_url.format(1), credentials=self.stranger_credentials,
                     expected_status=404)
 
     def test_correct_objects_get_deleted(self):
         object_data = [
-            dict(user=self.user, **self.request_data),
-            dict(user=self.stranger, **self.alt_data)
+            dict(user=self.user, **self.object_data),
+            dict(user=self.stranger, **self.alt_object_data)
         ]
         expected_object_fields = dict(id=1, **self.response_data)
         test = TwoObjectsBeforeRequestAndOneObjectAfterRequest(self.test_context,
@@ -197,14 +190,14 @@ class VieweSetUpdateTestGroup:
 
     def test_logged_in_user_cannot_patch_non_existing_objects(self):
         test = OneObjectExistsBeforeAndAfterRequest(self.test_context,
-                                                    object_data=dict(user=self.user, **self.request_data))
+                                                    object_data=dict(user=self.user, **self.object_data))
 
         self.run_test(test, url=self.obj_url.format(12), expected_status=404,
                       credentials=self.credentials, content_type='application/json')
 
     def test_owner_can_patch_their_object(self):
         expected_resp = dict(id=1, **self.alt_response_data)
-        object_data = dict(user=self.user, **self.request_data)
+        object_data = dict(user=self.user, **self.object_data)
 
         test = OneObjectExistsBeforeAndAfterRequest(self.test_context,
                                                     object_data=object_data,
@@ -215,10 +208,10 @@ class VieweSetUpdateTestGroup:
                       credentials=self.credentials, content_type='application/json')
 
     def test_patching_updates_correct_object(self):
-        data1 = dict(self.request_data)
+        data1 = dict(self.object_data)
         data1["name"] = "different_name"
 
-        object_data = [dict(user=self.user, **data1), dict(user=self.user, **self.request_data)]
+        object_data = [dict(user=self.user, **data1), dict(user=self.user, **self.object_data)]
         expected_objects = [
             dict(id=1, **self.alt_response_data), dict(id=2, **self.response_data)
         ]
@@ -233,14 +226,14 @@ class VieweSetUpdateTestGroup:
 
     def test_anonymous_user_cannot_patch_object(self):
         test = OneObjectExistsBeforeAndAfterRequest(self.test_context,
-                                                    object_data=dict(user=self.user, **self.request_data))
+                                                    object_data=dict(user=self.user, **self.object_data))
         
         self.run_test(test, url=self.obj_url.format(1), expected_status=403, 
                       content_type='application/json')
 
     def test_stranger_cannot_patch_objects_of_other_users(self):
         test = OneObjectExistsBeforeAndAfterRequest(self.test_context,
-                                                    object_data=dict(user=self.user, **self.request_data))
+                                                    object_data=dict(user=self.user, **self.object_data))
         self.run_test(test, url=self.obj_url.format(1), credentials=self.stranger_credentials,
                       expected_status=404, content_type='application/json')
 
@@ -279,18 +272,21 @@ class PresetsTestCase(AbstractViewSetTestCase):
     serializer_class = serializers.PresetSerializer
 
     def setUp(self):
-        self.request_data = {'name': 'default',
+        self.object_data = {'name': 'default',
                              'temperature': 0.1,
                              'top_k': 40,
                              'top_p': 0.95,
                              'min_p': 0.05,
                              'repeat_penalty': 1.1,
                              'n_predict': 512}
-        
+        self.request_data = dict(self.object_data)
+
         alt_data = dict(self.request_data)
         alt_data['name'] = "other object"
         alt_data['temperature'] = 0.9
         self.alt_data = alt_data
+
+        self.alt_object_data = dict(self.alt_data)
 
         self.credentials = dict(username="user", password="password")
         self.user = User.objects.create_user(**self.credentials)
@@ -306,15 +302,19 @@ class SystemMessageTestCase(AbstractViewSetTestCase):
     serializer_class = serializers.SystemMessageSerializer
 
     def setUp(self) -> None:
-        self.request_data = {
+        self.object_data = {
             "name": "assistant",
             "text": "You are a helpful assistant"
         }
+
+        self.request_data = self.object_data
 
         self.alt_data = {
             "name": "agent",
             "text": "You are an agent"
         }
+
+        self.alt_object_data = dict(self.alt_data)
 
         self.credentials = dict(username="user", password="password")
         self.user = User.objects.create_user(**self.credentials)
@@ -323,11 +323,92 @@ class SystemMessageTestCase(AbstractViewSetTestCase):
         self.stranger = User.objects.create_user(**self.stranger_credentials)
 
 
+class ConfigurationTestCase(AbstractViewSetTestCase):
+    list_url = "/chats/configurations/"
+    obj_url = "/chats/configurations/{}/"
+    model_class = models.Configuration
+    serializer_class = serializers.ConfigurationSerializer
+
+    def setUp(self) -> None:
+        self.credentials = dict(username="user", password="password")
+        self.user = User.objects.create_user(**self.credentials)
+
+        self.stranger_credentials = dict(username="stranger", password="stranger")
+        self.stranger = User.objects.create_user(**self.stranger_credentials)
+
+        preset = models.Preset.objects.create(user=self.user, **default_preset_data())
+        system_msg = models.SystemMessage.objects.create(user=self.user, **default_system_msg_data())
+
+        self.object_data = {
+            'name': 'myconf',
+            'model_repo': 'myrepo',
+            'file_name': 'myfile',
+            'launch_params': {
+                'p1': 10,
+                'p2': 20
+            },
+            'system_message': system_msg,
+            'preset': preset,
+            'tools': [],
+        }
+
+        self.request_data = {
+            'name': 'myconf',
+            'model_repo': 'myrepo',
+            'file_name': 'myfile',
+            'launch_params': {
+                'p1': 10,
+                'p2': 20
+            },
+            'system_message': system_msg.id,
+            'preset': preset.id,
+            'tools': [],
+        }
+
+        self.alt_data = dict(self.request_data)
+        self.alt_data.update({
+            "name": "other conf",
+            "model_repo": "other repo"
+        })
+
+        self.alt_object_data = dict(self.object_data)
+        self.alt_object_data.update({
+            "name": "other conf",
+            "model_repo": "other repo"
+        })
+
+    @property
+    def response_data(self):
+        sys_msg = dict(id=1, user=self.user.username, **default_system_msg_data())
+        preset = dict(id=1, user=self.user.username, **default_preset_data())
+        return dict(user=self.user.username,
+                    system_message_ro=sys_msg,
+                    preset_ro=preset,
+                    template_spec=None,
+                    voice_id=None,
+                    **self.request_data)
+
+    @property
+    def alt_response_data(self):
+        sys_msg = dict(id=1, user=self.user.username, **default_system_msg_data())
+        preset = dict(id=1, user=self.user.username, **default_preset_data())
+        return dict(user=self.user.username,
+                    system_message_ro=sys_msg,
+                    preset_ro=preset,
+                    template_spec=None,
+                    voice_id=None,
+                    **self.alt_data)
+
+
 class PresetRemainingMethodsTestCase(PresetsTestCase, ViewSetTestGroup):
     pass
 
 
 class SystemMessageRemainingMethodsTestCase(SystemMessageTestCase, ViewSetTestGroup):
+    pass
+
+
+class ConfigurationRemainingMethodsTestCase(ConfigurationTestCase, ViewSetTestGroup):
     pass
 
 
@@ -347,42 +428,31 @@ class SystemMessagePatchTestCase(SystemMessageTestCase, ViewSetPatchTestGroup):
     pass
 
 
-class ConfigurationTestCase:
-    list_url = "/chats/configurations/"
-    obj_url = "/chats/configurations/{}/"
-
-    def setUp(self) -> None:
-        preset = {
-            'name': 'default',
-            'temperature': 0.1,
-            'top_k': 40,
-            'top_p': 0.95,
-            'min_p': 0.05,
-            'repeat_penalty': 1.1,
-            'n_predict': 512
-        }
-        system_msg = {
-            "name": "assistant",
-            "text": "You are a helpful assistant"
-        }
-        self.client.post("/chats/presets/", preset)
-        self.client.post("/chats/system_messages/", system_msg)
-
-        self.request_data = {
-            'name': 'myconf',
-            'model_repo': 'myrepo',
-            'file_name': 'myfile',
-            'launch_params': {
-                'p1': 10,
-                'p2': 20
-            },
-            'system_message': 1,
-            'preset': 1,
-            'tools': [],
-        }
+class ConfigurationPutTestCase(ConfigurationTestCase, ViewSetPutTestGroup):
+    pass
 
 
-from dataclasses import dataclass
+class ConfigurationPatchTestCase(ConfigurationTestCase, ViewSetPatchTestGroup):
+    pass
+
+
+def default_preset_data():
+    return {
+        'name': 'default',
+        'temperature': 0.1,
+        'top_k': 40,
+        'top_p': 0.95,
+        'min_p': 0.05,
+        'repeat_penalty': 1.1,
+        'n_predict': 512
+    }
+
+
+def default_system_msg_data():
+    return {
+        "name": "assistant",
+        "text": "You are a helpful assistant"
+    }
 
 
 @dataclass
@@ -429,8 +499,7 @@ class BaseTestTemplate:
             request_data = dict(request_data)
             del request_data["user"]
         resp = method(url, request_data, **method_kwargs)
-
-        test_case.assertEqual(expected_status, resp.status_code)
+        test_case.assertEqual(expected_status, resp.status_code, msg=f"{resp.content}")
         expected_response = self.get_expected_response()
 
         if resp.status_code in [200, 201]:
