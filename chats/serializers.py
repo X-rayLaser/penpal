@@ -15,16 +15,19 @@ class SpeechSampleSerializer(serializers.ModelSerializer):
 
 
 class SystemMessageSerializer(serializers.ModelSerializer):
+    user = serializers.ReadOnlyField(source="user.username")
+
     class Meta:
         model = SystemMessage
-        fields = ['id', 'name', 'text']
+        fields = ['id', 'name', 'text', 'user']
 
 
 class PresetSerializer(serializers.ModelSerializer):
+    user = serializers.ReadOnlyField(source="user.username")
     class Meta:
         model = Preset
         fields = ['id', 'name', 'temperature', 'top_k', 
-                  'top_p', 'min_p', 'repeat_penalty', 'n_predict']
+                  'top_p', 'min_p', 'repeat_penalty', 'n_predict', 'user']
 
 
 class ConfigurationSerializer(serializers.ModelSerializer):

@@ -9,6 +9,7 @@ class SystemMessage(models.Model):
     text = models.CharField(max_length=4096)
 
     created_time = models.DateTimeField(auto_now_add=True, blank=True)
+    user = models.ForeignKey(User, related_name='system_messages', on_delete=models.CASCADE)
 
     def __str__(self):
         return self.name
@@ -40,6 +41,8 @@ class Preset(models.Model):
     n_predict = models.PositiveSmallIntegerField(
         validators=[MinValueValidator(1), MaxValueValidator(4096)]
     )
+
+    user = models.ForeignKey(User, related_name='presets', on_delete=models.CASCADE)
 
     def __str__(self):
         return self.name

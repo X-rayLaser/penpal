@@ -12,7 +12,7 @@ from rest_framework import viewsets, generics, views
 from rest_framework.parsers import BaseParser
 from rest_framework.decorators import parser_classes
 from rest_framework.renderers import BaseRenderer
-
+from rest_framework.permissions import IsAuthenticated
 from django.http.response import StreamingHttpResponse, HttpResponseNotAllowed, HttpResponseBadRequest
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import get_object_or_404
@@ -29,7 +29,9 @@ from .serializers import (
     SystemMessageSerializer,
     SpeechSampleSerializer
 )
+from chats import permissions
 from .utils import join_wavs
+
 
 import llm_utils
 from tools import llm_tools, get_specification
@@ -68,11 +70,25 @@ class AudioVerbatimRenderer(BinaryRenderer):
 class SystemMessageViewSet(viewsets.ModelViewSet):
     serializer_class = SystemMessageSerializer
     queryset = SystemMessage.objects.all()
+    permission_classes = [IsAuthenticated, permissions.IsOwner]
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+    def get_queryset(self):
+        return SystemMessage.objects.filter(user=self.request.user)
 
 
 class PresetViewSet(viewsets.ModelViewSet):
     serializer_class = PresetSerializer
     queryset = Preset.objects.all()
+    permission_classes = [IsAuthenticated, permissions.IsOwner]
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+    def get_queryset(self):
+        return Preset.objects.filter(user=self.request.user)
 
 
 class ConfigurationViewSet(viewsets.ModelViewSet):

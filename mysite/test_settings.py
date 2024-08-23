@@ -7,6 +7,10 @@ DEBUG = True
 
 ALLOWED_HOSTS = []
 
+PASSWORD_HASHERS = [
+    "django.contrib.auth.hashers.MD5PasswordHasher",
+]
+
 LLM_SETTINGS = {
     "generator": {
         "class": "llm_utils.dummy_generators.DummyGenerator",

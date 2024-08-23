@@ -3,7 +3,6 @@ requests[socks]
 djangorestframework
 markdown
 huggingface_hub
-music21
 celery[redis]
 websockets
 django-allauth
