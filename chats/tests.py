@@ -272,13 +272,7 @@ class PresetsTestCase(AbstractViewSetTestCase):
     serializer_class = serializers.PresetSerializer
 
     def setUp(self):
-        self.object_data = {'name': 'default',
-                             'temperature': 0.1,
-                             'top_k': 40,
-                             'top_p': 0.95,
-                             'min_p': 0.05,
-                             'repeat_penalty': 1.1,
-                             'n_predict': 512}
+        self.object_data = default_preset_data()
         self.request_data = dict(self.object_data)
 
         alt_data = dict(self.request_data)
@@ -302,10 +296,7 @@ class SystemMessageTestCase(AbstractViewSetTestCase):
     serializer_class = serializers.SystemMessageSerializer
 
     def setUp(self) -> None:
-        self.object_data = {
-            "name": "assistant",
-            "text": "You are a helpful assistant"
-        }
+        self.object_data = default_system_msg_data()
 
         self.request_data = self.object_data
 
@@ -352,30 +343,21 @@ class ConfigurationTestCase(AbstractViewSetTestCase):
             'tools': [],
         }
 
-        self.request_data = {
-            'name': 'myconf',
-            'model_repo': 'myrepo',
-            'file_name': 'myfile',
-            'launch_params': {
-                'p1': 10,
-                'p2': 20
-            },
+        self.request_data = dict(self.object_data)
+        self.request_data.update({
             'system_message': system_msg.id,
             'preset': preset.id,
-            'tools': [],
-        }
+        })
 
-        self.alt_data = dict(self.request_data)
-        self.alt_data.update({
+        changes = {
             "name": "other conf",
             "model_repo": "other repo"
-        })
+        }
+        self.alt_data = dict(self.request_data)
+        self.alt_data.update(changes)
 
         self.alt_object_data = dict(self.object_data)
-        self.alt_object_data.update({
-            "name": "other conf",
-            "model_repo": "other repo"
-        })
+        self.alt_object_data.update(changes)
 
     @property
     def response_data(self):
