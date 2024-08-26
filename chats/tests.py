@@ -1,4 +1,5 @@
 import unittest
+import inspect
 from dataclasses import dataclass
 from django.test import TestCase
 from django.contrib.auth.models import User
@@ -81,7 +82,7 @@ class FindApiCallTests(unittest.TestCase):
         self.assertEqual(3, offset)
 
 
-class ViewSetTestGroup:
+class EndPointCreateTests:
     # creation tests
     def test_anonymous_user_cannot_create_object(self):
         test = NoObjectsBeforeAndAfterRequest(self.test_context, request_data=self.request_data)
@@ -103,6 +104,8 @@ class ViewSetTestGroup:
         test.post(self.list_url, expected_status=400, credentials=self.credentials, 
                   content_type='application/json')
 
+
+class EndPointRetrieveTests:
     # retrieval tests
     def test_anonymous_user_cannot_get_created_object(self):
         test = OneObjectExistsBeforeAndAfterRequest(self.test_context,
@@ -151,6 +154,8 @@ class ViewSetTestGroup:
 
         test.get(self.list_url, expected_status=200, credentials=self.credentials)
 
+
+class EndpointDeleteTests:
     # deletion tests
     def test_cannot_delete_non_existing_object(self):
         test = OneObjectExistsBeforeAndAfterRequest(self.test_context,
@@ -185,7 +190,7 @@ class ViewSetTestGroup:
         test.delete(url=self.obj_url.format(2), expected_status=204, credentials=self.stranger_credentials)
 
 
-class VieweSetUpdateTestGroup:
+class EndPointUpdateTests:
     http_method = ""
 
     def test_logged_in_user_cannot_patch_non_existing_objects(self):
@@ -242,11 +247,11 @@ class VieweSetUpdateTestGroup:
         runner(*args, **kwargs)
 
 
-class ViewSetPutTestGroup(VieweSetUpdateTestGroup):
+class EndPointPutTests(EndPointUpdateTests):
     http_method = "put"
 
 
-class ViewSetPatchTestGroup(VieweSetUpdateTestGroup):
+class EndPointPatchTests(EndPointUpdateTests):
     http_method = "patch"
 
 
@@ -380,42 +385,6 @@ class ConfigurationTestCase(AbstractViewSetTestCase):
                     template_spec=None,
                     voice_id=None,
                     **self.alt_data)
-
-
-class PresetRemainingMethodsTestCase(PresetsTestCase, ViewSetTestGroup):
-    pass
-
-
-class SystemMessageRemainingMethodsTestCase(SystemMessageTestCase, ViewSetTestGroup):
-    pass
-
-
-class ConfigurationRemainingMethodsTestCase(ConfigurationTestCase, ViewSetTestGroup):
-    pass
-
-
-class PresetPutTestCase(PresetsTestCase, ViewSetPutTestGroup):
-    pass
-
-
-class PresetPatchTestCase(PresetsTestCase, ViewSetPatchTestGroup):
-    pass
-
-
-class SystemMessagePutTestCase(SystemMessageTestCase, ViewSetPutTestGroup):
-    pass
-
-
-class SystemMessagePatchTestCase(SystemMessageTestCase, ViewSetPatchTestGroup):
-    pass
-
-
-class ConfigurationPutTestCase(ConfigurationTestCase, ViewSetPutTestGroup):
-    pass
-
-
-class ConfigurationPatchTestCase(ConfigurationTestCase, ViewSetPatchTestGroup):
-    pass
 
 
 def default_preset_data():
@@ -580,3 +549,34 @@ class OneObjectBeforeRequestNoObjectAfterRequest(BaseTestTemplate,
                                                  CreateSingleObjectMixin,
                                                  AssertNoObjectsMixin):
     pass
+
+
+def collect_crud_suite(BaseTestCaseClass, base_name=''):
+    base_name = base_name or BaseTestCaseClass.__name__
+
+    suite = unittest.TestSuite()
+
+    bases = (BaseTestCaseClass, EndPointCreateTests, EndPointRetrieveTests, EndpointDeleteTests)
+    crd_case = type(base_name + 'CreateRetrieveDeleteTestCase', bases, {})
+
+    put_case = type(base_name + 'PutTestCase', (BaseTestCaseClass, EndPointPutTests), {})
+    patch_case = type(base_name + 'PatchTestCase', (BaseTestCaseClass, EndPointPatchTests), {})
+
+    test_cases = [crd_case, put_case, patch_case]
+    for case in test_cases:
+        suite.addTest(unittest.defaultTestLoader.loadTestsFromTestCase(case))
+
+    return suite
+
+
+def load_tests(loader, standard_tests, pattern):
+    """Allows to specify which tests to run manually"""
+    suite = unittest.TestSuite()
+    base_test_cases = [PresetsTestCase, SystemMessageTestCase, ConfigurationTestCase]
+    
+    suite.addTest(unittest.defaultTestLoader.loadTestsFromTestCase(FindApiCallTests))
+
+    for test_case in base_test_cases:
+        suite.addTest(collect_crud_suite(test_case))
+    
+    return suite
