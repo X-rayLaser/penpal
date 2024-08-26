@@ -64,6 +64,7 @@ class ChatSerializer(serializers.ModelSerializer):
         model = Chat
         fields = ['id', 'configuration', 'configuration_ro', 'system_message',
                   'prompt_text', 'human', 'date_time']
+        extra_kwargs = {'configuration': dict(required=True)}
 
     def update(self, instance, validated_data):
         # todo: consider other approaches

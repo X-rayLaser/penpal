@@ -105,7 +105,7 @@ class EndPointCreateTests:
                   content_type='application/json')
 
 
-class EndPointRetrieveTests:
+class EndPointDetailTests:
     # retrieval tests
     def test_anonymous_user_cannot_get_created_object(self):
         test = OneObjectExistsBeforeAndAfterRequest(self.test_context,
@@ -134,6 +134,8 @@ class EndPointRetrieveTests:
                                                     object_data=dict(user=self.user, **self.object_data))
         test.get(url=self.obj_url.format(4), expected_status=403)
 
+
+class EndPointListTests:
     def test_no_objects_initially(self):
         test = NoObjectsBeforeAndAfterRequest(self.test_context, expected_response=[])
         test.get(self.list_url, expected_status=200, credentials=self.credentials)
@@ -153,6 +155,10 @@ class EndPointRetrieveTests:
                                                     expected_response=[dict(id=1, **self.response_data)])
 
         test.get(self.list_url, expected_status=200, credentials=self.credentials)
+
+
+class EndPointRetrieveTests(EndPointDetailTests, EndPointListTests):
+    pass
 
 
 class EndpointDeleteTests:
@@ -363,6 +369,7 @@ class ConfigurationTestCase(AbstractViewSetTestCase):
 
         self.alt_object_data = dict(self.object_data)
         self.alt_object_data.update(changes)
+        
 
     @property
     def response_data(self):
@@ -387,6 +394,73 @@ class ConfigurationTestCase(AbstractViewSetTestCase):
                     **self.alt_data)
 
 
+class ChatListCreateTestCase(AbstractViewSetTestCase, EndPointCreateTests):
+    maxDiff=None
+    list_url = "/chats/chats/"
+    obj_url = "/chats/chats/{}/"
+    model_class = models.Chat
+    serializer_class = serializers.ChatSerializer
+    exclude_fields = ["date_time"]
+
+    def setUp(self) -> None:
+        self.credentials = dict(username="user", password="password")
+        self.user = User.objects.create_user(**self.credentials)
+
+        self.stranger_credentials = dict(username="stranger", password="stranger")
+        self.stranger = User.objects.create_user(**self.stranger_credentials)
+
+        configuration_data = default_configuration_data(self.user)
+        configuration = models.Configuration.objects.create(**configuration_data)
+        self.configuration = configuration
+
+        self.object_data = {
+            'configuration': configuration,
+        }
+
+        self.request_data = {
+            'configuration': configuration.id,
+        }
+
+        changes = {}
+        self.alt_data = dict(self.request_data)
+        self.alt_data.update(changes)
+
+        self.alt_object_data = dict(self.object_data)
+        self.alt_object_data.update(changes)
+
+    @property
+    def response_data(self):
+        sys_msg = dict(id=1, user=self.user.username, **default_system_msg_data())
+        preset = dict(id=1, user=self.user.username, **default_preset_data())
+        conf_ro = dict(id=1,
+                       name='myconf',
+                       model_repo='myrepo',
+                       file_name='myfile',
+                       launch_params={'p1': 10, 'p2': 20},
+                       tools=[],
+                       user=self.user.username,
+                       system_message=1,
+                       system_message_ro=sys_msg,
+                       preset=1,
+                       preset_ro=preset,
+                       template_spec=None,
+                       voice_id=None)
+
+        return {
+            'human': self.user.username,
+            'configuration': self.configuration.id,
+            'configuration_ro': conf_ro,
+            'system_message': None,
+            'prompt_text': "**No data yet**",
+            'human': None,
+            #'date_time': str(self.configuration.date_time)
+        }
+
+    @property
+    def alt_response_data(self):
+        return self.response_data
+
+
 def default_preset_data():
     return {
         'name': 'default',
@@ -403,6 +477,25 @@ def default_system_msg_data():
     return {
         "name": "assistant",
         "text": "You are a helpful assistant"
+    }
+
+
+def default_configuration_data(user):
+    preset = models.Preset.objects.create(user=user, **default_preset_data())
+    system_msg = models.SystemMessage.objects.create(user=user, **default_system_msg_data())
+
+    return {
+        'user': user,
+        'name': 'myconf',
+        'model_repo': 'myrepo',
+        'file_name': 'myfile',
+        'launch_params': {
+            'p1': 10,
+            'p2': 20
+        },
+        'system_message': system_msg,
+        'preset': preset,
+        'tools': [],
     }
 
 
@@ -450,11 +543,14 @@ class BaseTestTemplate:
             request_data = dict(request_data)
             del request_data["user"]
         resp = method(url, request_data, **method_kwargs)
+
         test_case.assertEqual(expected_status, resp.status_code, msg=f"{resp.content}")
         expected_response = self.get_expected_response()
 
+        exclude = getattr(test_case, "exclude_fields", [])
         if resp.status_code in [200, 201]:
-            test_case.assertEqual(expected_response, resp.json())
+            actual = exclude_fields(resp.json(), exclude)
+            test_case.assertEqual(expected_response, actual)
 
         self.make_assertions()
 
@@ -462,6 +558,13 @@ class BaseTestTemplate:
         if self.expected_response is None:
             return self.expected_object_fields
         return self.expected_response
+
+
+def exclude_fields(obj, exclude_list):
+    if not isinstance(obj, dict):
+        return obj
+    
+    return {k: v for k, v in obj.items() if k not in exclude_list}
 
 
 class CreateSingleObjectMixin:
@@ -498,7 +601,10 @@ class AssertOneObjectExistsWithFieldsMixin:
         
         obj = model_class.objects.first()
         ser = serializer_class(instance=obj)
-        self.context.test_case.assertEqual(expected_fields, ser.data)
+        exclude_list = getattr(self.context.test_case, "exclude_fields", [])
+        actual = exclude_fields(ser.data, exclude_list)
+
+        self.context.test_case.assertEqual(expected_fields, actual)
 
 
 class AssertTwoObjectsExistWithCorrectFieldsMixin:
@@ -513,9 +619,16 @@ class AssertTwoObjectsExistWithCorrectFieldsMixin:
         test_case.assertEqual(2, self.context.model_class.objects.count())
         
         obj1, obj2 = self.context.model_class.objects.all()
-        
-        test_case.assertEqual(expected_fields1, self.context.serializer_class(instance=obj1).data)
-        test_case.assertEqual(expected_fields2, self.context.serializer_class(instance=obj2).data)
+
+        exclude_list = getattr(self.context.test_case, "exclude_fields", [])
+        actual_fields1 = self.context.serializer_class(instance=obj1).data
+        actual_fields1 = exclude_fields(actual_fields1, exclude_list)
+
+        actual_fields2 = self.context.serializer_class(instance=obj2).data
+        actual_fields2 = exclude_fields(actual_fields2, exclude_list)
+
+        test_case.assertEqual(expected_fields1, actual_fields1)
+        test_case.assertEqual(expected_fields2, actual_fields2)
 
 
 class NoObjectsBeforeAndAfterRequest(BaseTestTemplate, AssertNoObjectsMixin):
@@ -575,6 +688,8 @@ def load_tests(loader, standard_tests, pattern):
     base_test_cases = [PresetsTestCase, SystemMessageTestCase, ConfigurationTestCase]
     
     suite.addTest(unittest.defaultTestLoader.loadTestsFromTestCase(FindApiCallTests))
+
+    suite.addTest(unittest.defaultTestLoader.loadTestsFromTestCase(ChatListCreateTestCase))
 
     for test_case in base_test_cases:
         suite.addTest(collect_crud_suite(test_case))

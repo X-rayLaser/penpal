@@ -188,6 +188,7 @@ class ChatList(generics.ListCreateAPIView):
     queryset = Chat.objects.all()
     serializer_class = ChatSerializer
     pagination_class = DefaultPagination
+    permission_classes = [IsAuthenticated, permissions.IsChatOwner]
 
 
 @api_view(['GET', 'PATCH', 'DELETE'])
