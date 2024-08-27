@@ -57,13 +57,13 @@ class ConfigurationSerializer(serializers.ModelSerializer):
 
 class ChatSerializer(serializers.ModelSerializer):
     prompt_text = serializers.ReadOnlyField(source='prompt.text', default="**No data yet**")
-
     configuration_ro = ConfigurationSerializer(source="configuration", read_only=True)
+    user = serializers.ReadOnlyField(source="user.username")
 
     class Meta:
         model = Chat
         fields = ['id', 'configuration', 'configuration_ro', 'system_message',
-                  'prompt_text', 'human', 'date_time']
+                  'prompt_text', 'user', 'date_time']
         extra_kwargs = {'configuration': dict(required=True)}
 
     def update(self, instance, validated_data):

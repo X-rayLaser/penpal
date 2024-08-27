@@ -8,9 +8,9 @@ import imghdr
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from rest_framework import viewsets, generics, views
+from rest_framework import viewsets, generics, mixins, views
 from rest_framework.parsers import BaseParser
-from rest_framework.decorators import parser_classes
+from rest_framework.decorators import parser_classes, permission_classes
 from rest_framework.renderers import BaseRenderer
 from rest_framework.permissions import IsAuthenticated
 from django.http.response import StreamingHttpResponse, HttpResponseNotAllowed, HttpResponseBadRequest
@@ -185,32 +185,24 @@ def transcribe_speech(request):
 
 
 class ChatList(generics.ListCreateAPIView):
-    queryset = Chat.objects.all()
     serializer_class = ChatSerializer
     pagination_class = DefaultPagination
-    permission_classes = [IsAuthenticated, permissions.IsChatOwner]
+    permission_classes = [IsAuthenticated, permissions.IsOwner]
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+    def get_queryset(self):
+        return Chat.objects.filter(user=self.request.user)
 
 
-@api_view(['GET', 'PATCH', 'DELETE'])
-def chat_detail(request, pk):
-    try:
-        chat = Chat.objects.get(pk=pk)
-    except Chat.DoesNotExist:
-        return Response(status=status.HTTP_404_NOT_FOUND)
+class ChatDetailView(generics.RetrieveUpdateDestroyAPIView):
+    http_method_names = ['get', 'patch', 'delete', 'head', 'options', 'trace']
+    serializer_class = ChatSerializer
+    permission_classes = [IsAuthenticated, permissions.IsOwner]
 
-    if request.method == 'GET':
-        serializer = ChatSerializer(chat)
-        return Response(serializer.data, status=status.HTTP_200_OK)
-    
-    if request.method == 'PATCH':
-        serializer = ChatSerializer(chat, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(serializer.data)
-
-    if request.method == 'DELETE':
-        chat.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+    def get_queryset(self):
+        return Chat.objects.filter(user=self.request.user)
 
 
 @api_view(['GET'])

@@ -15,7 +15,7 @@ urlpatterns = [
     path('transcribe_speech/', views.transcribe_speech),
     path('completion/', views.generate_completion),
     path('chats/', views.ChatList.as_view()),
-    path('chats/<int:pk>/', views.chat_detail),
+    path('chats/<int:pk>/', views.ChatDetailView.as_view()),
     path('treebanks/<int:pk>/', views.treebank_detail),
     path('messages/', views.message_list),
     path('messages/<int:pk>/', views.message_detail),

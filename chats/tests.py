@@ -137,7 +137,8 @@ class EndPointDetailTests:
 
 class EndPointListTests:
     def test_no_objects_initially(self):
-        test = NoObjectsBeforeAndAfterRequest(self.test_context, expected_response=[])
+        expected_response = self.response_with_no_objects()
+        test = NoObjectsBeforeAndAfterRequest(self.test_context, expected_response=expected_response)
         test.get(self.list_url, expected_status=200, credentials=self.credentials)
 
     def test_anonymous_user_cannot_list_objects(self):
@@ -150,11 +151,27 @@ class EndPointListTests:
             dict(user=self.user, **self.object_data),
             dict(user=self.stranger, **self.alt_object_data)
         ]
+        expected_response = self.response_with_one_object()
         test = TwoObjectsExistBeforeAndAfterRequest(self.test_context,
                                                     object_data=object_data,
-                                                    expected_response=[dict(id=1, **self.response_data)])
+                                                    expected_response=expected_response)
 
         test.get(self.list_url, expected_status=200, credentials=self.credentials)
+
+    def response_with_no_objects(self):
+        return []
+
+    def response_with_one_object(self):
+        return [dict(id=1, **self.response_data)]
+
+
+class EndPointPaginatedListTests(EndPointListTests):
+    def response_with_no_objects(self):
+        return {'count': 0, 'next': None, 'previous': None, 'results': []}
+
+    def response_with_one_object(self):
+        fields = super().response_with_one_object()
+        return {'count': 1, 'next': None, 'previous': None, 'results': fields}
 
 
 class EndPointRetrieveTests(EndPointDetailTests, EndPointListTests):
@@ -219,8 +236,11 @@ class EndPointUpdateTests:
                       credentials=self.credentials, content_type='application/json')
 
     def test_patching_updates_correct_object(self):
-        data1 = dict(self.object_data)
-        data1["name"] = "different_name"
+        if hasattr(self, "tertiary_object_data"):
+            data1 = dict(getattr(self, "tertiary_object_data"))
+        else:
+            data1 = dict(self.object_data)
+            data1["name"] = "different_name"
 
         object_data = [dict(user=self.user, **data1), dict(user=self.user, **self.object_data)]
         expected_objects = [
@@ -394,13 +414,12 @@ class ConfigurationTestCase(AbstractViewSetTestCase):
                     **self.alt_data)
 
 
-class ChatListCreateTestCase(AbstractViewSetTestCase, EndPointCreateTests):
+class BaseChatTestCase(AbstractViewSetTestCase):
     maxDiff=None
     list_url = "/chats/chats/"
     obj_url = "/chats/chats/{}/"
     model_class = models.Chat
     serializer_class = serializers.ChatSerializer
-    exclude_fields = ["date_time"]
 
     def setUp(self) -> None:
         self.credentials = dict(username="user", password="password")
@@ -421,12 +440,17 @@ class ChatListCreateTestCase(AbstractViewSetTestCase, EndPointCreateTests):
             'configuration': configuration.id,
         }
 
-        changes = {}
+        changes = {
+            'system_message': 'New system message'
+        }
         self.alt_data = dict(self.request_data)
         self.alt_data.update(changes)
 
         self.alt_object_data = dict(self.object_data)
         self.alt_object_data.update(changes)
+
+        self.tertiary_object_data = dict(self.object_data)
+        self.tertiary_object_data["system_message"] = "Even newer system message"
 
     @property
     def response_data(self):
@@ -447,18 +471,30 @@ class ChatListCreateTestCase(AbstractViewSetTestCase, EndPointCreateTests):
                        voice_id=None)
 
         return {
-            'human': self.user.username,
+            'user': self.user.username,
             'configuration': self.configuration.id,
             'configuration_ro': conf_ro,
             'system_message': None,
-            'prompt_text': "**No data yet**",
-            'human': None,
-            #'date_time': str(self.configuration.date_time)
+            'prompt_text': "**No data yet**"
         }
 
     @property
     def alt_response_data(self):
-        return self.response_data
+        data = dict(self.response_data)
+        data['system_message'] = 'New system message'
+        return data
+
+
+class ChatCreateRetrieveDeleteTestCase(BaseChatTestCase,
+                                       EndPointCreateTests,
+                                       EndPointPaginatedListTests,
+                                       EndPointDetailTests,
+                                       EndpointDeleteTests):
+    exclude_fields = ["date_time"]
+
+
+class ChatPatchTestCase(BaseChatTestCase, EndPointPatchTests):
+    exclude_fields = ["date_time", "prompt_text"]
 
 
 def default_preset_data():
@@ -550,6 +586,7 @@ class BaseTestTemplate:
         exclude = getattr(test_case, "exclude_fields", [])
         if resp.status_code in [200, 201]:
             actual = exclude_fields(resp.json(), exclude)
+            expected_response = exclude_fields(expected_response, exclude)
             test_case.assertEqual(expected_response, actual)
 
         self.make_assertions()
@@ -561,10 +598,14 @@ class BaseTestTemplate:
 
 
 def exclude_fields(obj, exclude_list):
+    if isinstance(obj, list):
+        return [exclude_fields(item, exclude_list) for item in obj]
+        
     if not isinstance(obj, dict):
         return obj
-    
-    return {k: v for k, v in obj.items() if k not in exclude_list}
+
+    return {k: exclude_fields(v, exclude_list)
+            for k, v in obj.items() if k not in exclude_list}
 
 
 class CreateSingleObjectMixin:
@@ -595,13 +636,14 @@ class AssertOneObjectExistsWithFieldsMixin:
     def make_assertions(self):
         model_class = self.context.model_class
         serializer_class = self.context.serializer_class
+        exclude_list = getattr(self.context.test_case, "exclude_fields", [])
 
         expected_fields = self.expected_object_fields or self.first_instance_fields
+        expected_fields = exclude_fields(expected_fields, exclude_list)
         self.context.test_case.assertEqual(1, model_class.objects.count())
         
         obj = model_class.objects.first()
         ser = serializer_class(instance=obj)
-        exclude_list = getattr(self.context.test_case, "exclude_fields", [])
         actual = exclude_fields(ser.data, exclude_list)
 
         self.context.test_case.assertEqual(expected_fields, actual)
@@ -621,6 +663,10 @@ class AssertTwoObjectsExistWithCorrectFieldsMixin:
         obj1, obj2 = self.context.model_class.objects.all()
 
         exclude_list = getattr(self.context.test_case, "exclude_fields", [])
+
+        expected_fields1 = exclude_fields(expected_fields1, exclude_list)
+        expected_fields2 = exclude_fields(expected_fields2, exclude_list)
+        
         actual_fields1 = self.context.serializer_class(instance=obj1).data
         actual_fields1 = exclude_fields(actual_fields1, exclude_list)
 
@@ -689,7 +735,8 @@ def load_tests(loader, standard_tests, pattern):
     
     suite.addTest(unittest.defaultTestLoader.loadTestsFromTestCase(FindApiCallTests))
 
-    suite.addTest(unittest.defaultTestLoader.loadTestsFromTestCase(ChatListCreateTestCase))
+    suite.addTest(unittest.defaultTestLoader.loadTestsFromTestCase(ChatCreateRetrieveDeleteTestCase))
+    suite.addTest(unittest.defaultTestLoader.loadTestsFromTestCase(ChatPatchTestCase))
 
     for test_case in base_test_cases:
         suite.addTest(collect_crud_suite(test_case))
