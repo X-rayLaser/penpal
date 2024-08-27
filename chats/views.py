@@ -184,22 +184,15 @@ def transcribe_speech(request):
     return Response({"text": text})
 
 
-class ChatList(generics.ListCreateAPIView):
+class ChatViewSet(viewsets.ModelViewSet):
+    queryset = Chat.objects.all()
     serializer_class = ChatSerializer
     pagination_class = DefaultPagination
     permission_classes = [IsAuthenticated, permissions.IsOwner]
+    http_method_names = ['get', 'post', 'patch', 'delete', 'head', 'options', 'trace']
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
-
-    def get_queryset(self):
-        return Chat.objects.filter(user=self.request.user)
-
-
-class ChatDetailView(generics.RetrieveUpdateDestroyAPIView):
-    http_method_names = ['get', 'patch', 'delete', 'head', 'options', 'trace']
-    serializer_class = ChatSerializer
-    permission_classes = [IsAuthenticated, permissions.IsOwner]
 
     def get_queryset(self):
         return Chat.objects.filter(user=self.request.user)

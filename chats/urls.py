@@ -8,14 +8,13 @@ router = routers.DefaultRouter()
 router.register("system_messages", views.SystemMessageViewSet)
 router.register("presets", views.PresetViewSet)
 router.register("configurations", views.ConfigurationViewSet)
+router.register("chats", views.ChatViewSet)
 router.register("speech-samples", views.SpeechSampleViewSet)
 
 urlpatterns = [
     path('generate_reply/', views.generate_reply),
     path('transcribe_speech/', views.transcribe_speech),
     path('completion/', views.generate_completion),
-    path('chats/', views.ChatList.as_view()),
-    path('chats/<int:pk>/', views.ChatDetailView.as_view()),
     path('treebanks/<int:pk>/', views.treebank_detail),
     path('messages/', views.message_list),
     path('messages/<int:pk>/', views.message_detail),
