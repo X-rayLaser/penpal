@@ -13,6 +13,7 @@ from rest_framework.parsers import BaseParser
 from rest_framework.decorators import parser_classes, permission_classes
 from rest_framework.renderers import BaseRenderer
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import PermissionDenied
 from django.http.response import StreamingHttpResponse, HttpResponseNotAllowed, HttpResponseBadRequest
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import get_object_or_404
@@ -212,16 +213,33 @@ def treebank_detail(request, pk):
     return Response(serializer.data, status=status.HTTP_200_OK)
 
 
-@api_view(['GET', 'POST'])
-def message_list(request):
-    if request.method == 'GET':
-        messages = Message.objects.all()
-        serializer = MessageSerializer(messages, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+class MessageView(generics.ListCreateAPIView):
+    serializer_class = MessageSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_serializer(self, *args, **kwargs):
+        if self.request.method == 'GET':
+            messages = Message.objects.all()
+            return MessageSerializer(messages, many=True)
 
-    data = request.data.copy()
+        data = self.request.data.copy()
+        data['image'] = self._get_image(data)
 
-    if 'image_data_uri' in data:
+        return MessageSerializer(data=data)
+
+    def perform_create(self, serializer):
+        chat_id = self.request.data["chat"]
+        chat = generics.get_object_or_404(Chat.objects.all(), pk=chat_id)
+        user_owns_parent = (self.request.user and self.request.user == chat.user)
+        if not user_owns_parent:
+            raise PermissionDenied("Only chat owners can add messages to their chats")
+
+        return super().perform_create(serializer)
+
+    def _get_image(self, data):
+        if 'image_data_uri' not in data:
+            return None
+
         image_b64 = data.pop('image_data_uri')[0]
         fmt, image_str = image_b64.split(';base64,')
         extension = fmt.split('/')[-1]
@@ -229,17 +247,7 @@ def message_list(request):
         image_data = base64.b64decode(image_str)
 
         extension = extension or imghdr.what(None, h=image_data) or "jpg"
-        image = ContentFile(image_data, name=f'prompt_image.{extension}')
-    else:
-        image = None
-
-    data['image'] = image
-    serializer = MessageSerializer(data=data)
-
-    if serializer.is_valid():
-        serializer.save()
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return ContentFile(image_data, name=f'prompt_image.{extension}')
 
 
 @api_view(['GET', 'DELETE'])

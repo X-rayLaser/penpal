@@ -16,7 +16,7 @@ urlpatterns = [
     path('transcribe_speech/', views.transcribe_speech),
     path('completion/', views.generate_completion),
     path('treebanks/<int:pk>/', views.treebank_detail),
-    path('messages/', views.message_list),
+    path('messages/', views.MessageView.as_view()),
     path('messages/<int:pk>/', views.message_detail),
     path('tools-spec/', views.tools_specification),
     path('supported-tools/', views.supported_tools),

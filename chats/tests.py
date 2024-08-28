@@ -497,6 +497,51 @@ class ChatPatchTestCase(BaseChatTestCase, EndPointPatchTests):
     exclude_fields = ["date_time", "prompt_text"]
 
 
+class MessageCreateTestCase(AbstractViewSetTestCase, EndPointCreateTests):
+    maxDiff=None
+    list_url = "/chats/messages/"
+    model_class = models.Message
+    serializer_class = serializers.MessageSerializer
+    exclude_fields = ["date_time"]
+
+    def setUp(self) -> None:
+        self.credentials = dict(username="user", password="password")
+        self.user = User.objects.create_user(**self.credentials)
+
+        self.stranger_credentials = dict(username="stranger", password="stranger")
+        self.stranger = User.objects.create_user(**self.stranger_credentials)
+
+        chat = models.Chat.objects.create(user=self.user)
+        self.chat = chat
+
+        self.object_data = {
+            'chat': chat,
+            'text':  "Hello, world"
+        }
+
+        self.request_data = dict(self.object_data)
+        self.request_data.update({
+            'chat': chat.id
+        })
+
+        self.alt_data = dict(self.request_data)
+
+    @property
+    def response_data(self):
+        return dict(
+                    text="Hello, world",
+                    clean_text="Hello, world",
+                    html="<p>Hello, world</p>",
+                    generation_details=None,
+                    parent=None,
+                    replies=[],
+                    chat=self.chat.id,
+                    audio=None,
+                    image=None,
+                    image_b64=None,
+                    attached_files=[])
+
+
 def default_preset_data():
     return {
         'name': 'default',
@@ -737,6 +782,11 @@ def load_tests(loader, standard_tests, pattern):
 
     suite.addTest(unittest.defaultTestLoader.loadTestsFromTestCase(ChatCreateRetrieveDeleteTestCase))
     suite.addTest(unittest.defaultTestLoader.loadTestsFromTestCase(ChatPatchTestCase))
+    suite.addTest(unittest.defaultTestLoader.loadTestsFromTestCase(MessageCreateTestCase))
+
+
+    suite.addTest(MessageCreateTestCase("test_anonymous_user_cannot_create_object"))
+    
 
     for test_case in base_test_cases:
         suite.addTest(collect_crud_suite(test_case))
