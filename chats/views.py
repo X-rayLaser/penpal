@@ -179,6 +179,7 @@ class BinaryParser(BaseParser):
 
 @api_view(["POST"])
 @parser_classes([BinaryParser])
+@permission_classes([IsAuthenticated])
 def transcribe_speech(request):
     raw_audio = request.data
     text = stt_backend(raw_audio)
@@ -199,18 +200,16 @@ class ChatViewSet(viewsets.ModelViewSet):
         return Chat.objects.filter(user=self.request.user)
 
 
-@api_view(['GET'])
-def treebank_detail(request, pk):
-    try:
-        chat = Chat.objects.get(pk=pk)
-    except Chat.DoesNotExist:
-        return Response(status=status.HTTP_404_NOT_FOUND)
+class TreeBankDetailView(generics.RetrieveAPIView):
+    queryset = Chat.objects.all()
+    permission_classes = [IsAuthenticated, permissions.IsOwner]
 
-    if not chat.prompt:
-        return Response({}, status=status.HTTP_200_OK)
+    def get_serializer(self, *args, **kwargs):
+        chat = self.get_object()
+        return TreebankSerializer(chat.prompt)
 
-    serializer = TreebankSerializer(chat.prompt)
-    return Response(serializer.data, status=status.HTTP_200_OK)
+    def get_queryset(self):
+        return Chat.objects.filter(user=self.request.user)
 
 
 class MessageView(generics.CreateAPIView):
@@ -276,6 +275,7 @@ def supported_tools(request):
 
 
 @api_view(['get'])
+@permission_classes([IsAuthenticated])
 def list_voices(request):
     voices = tts_backend.list_voices()
     return Response(voices)

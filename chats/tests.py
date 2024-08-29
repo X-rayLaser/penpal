@@ -590,22 +590,83 @@ class MessageCreateTestCase(AbstractViewSetTestCase, EndPointCreateTests):
 
 class VoiceListTests(TestCase):
     # todo: more tests for edge cases (network errors, etc.)
-    def test_list_voices(self):
+
+    def test_logged_in_user_can_list_voices(self):
+        credentials = dict(username="user", password="password")
+        User.objects.create_user(**credentials)
+        self.client.login(**credentials)
         resp = self.client.get('/chats/list-voices/')
-        self.assertEqual(200, resp.status_code)
+        self.assertEqual(200, resp.status_code, resp.json())
         expected = [{"voice_id": "Voice 1", "url": ""},
                     {"voice_id": "Voice 2", "url": ""},
                     {"voice_id": "Voice 3", "url": ""}]
         self.assertEqual(expected, resp.json())
 
+    def test_anonymous_user_cannot_list_voices(self):
+        resp = self.client.get('/chats/list-voices/')
+        self.assertEqual(403, resp.status_code)
+
 
 class TranscribeSpeechTests(TestCase):
     # todo: more tests for edge cases (network errors, etc.)
-    def test_transcribe(self):
-        resp = self.client.post('/chats/transcribe_speech/')
+    def test_logged_in_user_can_transcribe(self):
+        credentials = dict(username="user", password="password")
+        User.objects.create_user(**credentials)
+        self.client.login(**credentials)
+        resp = self.client.post('/chats/transcribe_speech/', data=b'data', 
+                                content_type='application/octet-stream')
         expected = dict(text="This is a speech transcribed by DummySpeechToTextBackend backend")
-        self.assertEqual(200, resp.status_code)
+        self.assertEqual(200, resp.status_code, resp.json())
         self.assertEqual(expected, resp.json())
+
+    def test_anonymous_user_cannot_transcribe(self):
+        resp = self.client.post('/chats/transcribe_speech/', data=b'data',
+                                content_type='application/octet-stream')
+        self.assertEqual(403, resp.status_code)
+
+
+class TreeBankTests(TestCase):
+    # todo: test more edge cases
+    obj_url = '/chats/treebanks/{}/'
+    def setUp(self):
+        self.credentials = dict(username="user", password="password")
+        self.user = User.objects.create_user(**self.credentials)
+
+        self.stranger_credentials = dict(username="stranger", password="stranger")
+        self.stranger = User.objects.create_user(**self.stranger_credentials)
+
+        root_msg = models.Message.objects.create(text="First message")
+        chat = models.Chat.objects.create(user=self.user, prompt=root_msg)
+
+        models.Message.objects.create(parent=root_msg, text="Response 1")
+        models.Message.objects.create(parent=root_msg, text="Response 2")
+
+    def test_anonymous_user_cannot_get_object(self):
+        resp = self.client.get(self.obj_url.format(1))
+        self.assertEqual(403, resp.status_code)
+
+    def test_logged_in_stranger_cannot_retrieve_object(self):
+        self.client.login(**self.stranger_credentials)
+        resp = self.client.get(self.obj_url.format(1))
+        self.assertEqual(404, resp.status_code)
+
+    def test_logged_in_owner_can_get_created_object(self):
+        self.client.login(**self.credentials)
+        resp = self.client.get(self.obj_url.format(1))
+        self.assertEqual(200, resp.status_code)
+        self.assertEqual(2, len(resp.json()["replies"]), resp.json())
+        first, second = resp.json()["replies"]
+        self.assertEqual("Response 1", first["text"])
+        self.assertEqual("Response 2", second["text"])
+        
+    def test_cannot_get_non_existing_object(self):
+        self.client.login(**self.credentials)
+        resp = self.client.get(self.obj_url.format(14))
+        self.assertEqual(404, resp.status_code)
+
+    def test_anonymous_user_cannot_get_non_existing_object(self):
+        resp = self.client.get(self.obj_url.format(14))
+        self.assertEqual(403, resp.status_code)
 
 
 def default_preset_data():
@@ -850,6 +911,8 @@ def load_tests(loader, standard_tests, pattern):
     suite.addTest(unittest.defaultTestLoader.loadTestsFromTestCase(ChatPatchTestCase))
     suite.addTest(unittest.defaultTestLoader.loadTestsFromTestCase(MessageCreateTestCase))
     suite.addTest(unittest.defaultTestLoader.loadTestsFromTestCase(VoiceListTests))
+    suite.addTest(unittest.defaultTestLoader.loadTestsFromTestCase(TranscribeSpeechTests))
+    suite.addTest(unittest.defaultTestLoader.loadTestsFromTestCase(TreeBankTests))
 
     for test_case in base_test_cases:
         suite.addTest(collect_crud_suite(test_case))
