@@ -17,7 +17,7 @@ urlpatterns = [
     path('completion/', views.generate_completion),
     path('treebanks/<int:pk>/', views.treebank_detail),
     path('messages/', views.MessageView.as_view()),
-    path('messages/<int:pk>/', views.message_detail),
+    #path('messages/<int:pk>/', views.message_detail), # todo: delete it (unused)
     path('tools-spec/', views.tools_specification),
     path('supported-tools/', views.supported_tools),
     path('list-voices/', views.list_voices),

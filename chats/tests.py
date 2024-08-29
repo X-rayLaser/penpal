@@ -1,5 +1,7 @@
 import unittest
 import inspect
+import base64
+from io import BytesIO
 from dataclasses import dataclass
 from django.test import TestCase
 from django.contrib.auth.models import User
@@ -526,6 +528,9 @@ class MessageCreateTestCase(AbstractViewSetTestCase, EndPointCreateTests):
 
         self.alt_data = dict(self.request_data)
 
+        self.sample_img = (b"GIF89a\x01\x00\x01\x00\x00\x00\x00!\xf9\x04\x01\x00\x00\x00"
+                           b"\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x01\x00\x00")
+
     @property
     def response_data(self):
         return dict(
@@ -540,6 +545,48 @@ class MessageCreateTestCase(AbstractViewSetTestCase, EndPointCreateTests):
                     image=None,
                     image_b64=None,
                     attached_files=[])
+
+    def test_image_upload(self):
+        self.client.login(**self.credentials)
+        data = dict(self.request_data)
+
+        img = BytesIO(self.sample_img)
+        img.name = "image.gif"
+
+        data.update(image=img)
+        resp = self.client.post(self.list_url, data=data)
+
+        self.assertEqual(201, resp.status_code, resp.json())
+        self.assertIsNotNone(resp.json()["image"], resp.json())
+        self.assertIsNotNone(resp.json()["image_b64"])
+
+    def test_image_b64_upload(self):
+        b64 = base64.b64encode(self.sample_img)
+        image_data_uri = f"data:image/gif;base64,{b64.decode('ascii')}"
+
+        self.client.login(**self.credentials)
+        data = dict(self.request_data)
+        data.update(image_data_uri=image_data_uri)
+        resp = self.client.post(self.list_url, data=data)
+
+        self.assertEqual(201, resp.status_code, resp.json())
+        self.assertIsNotNone(resp.json()["image"], resp.json())
+        self.assertIsNotNone(resp.json()["image_b64"])
+
+    def test_audio_upload(self):
+        audio_file = open("test_data/sample.wav", "rb")
+
+        data = dict(self.request_data)
+        data.update(audio=audio_file)
+
+
+        self.client.login(**self.credentials)
+        resp = self.client.post(self.list_url, data=data)
+
+        self.assertEqual(201, resp.status_code)
+        self.assertIsNotNone(models.Message.objects.first().audio)
+        self.assertIsNone(resp.json()["audio"], resp.json())
+        audio_file.close()
 
 
 def default_preset_data():

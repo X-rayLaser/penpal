@@ -213,18 +213,13 @@ def treebank_detail(request, pk):
     return Response(serializer.data, status=status.HTTP_200_OK)
 
 
-class MessageView(generics.ListCreateAPIView):
+class MessageView(generics.CreateAPIView):
     serializer_class = MessageSerializer
     permission_classes = [IsAuthenticated]
     
     def get_serializer(self, *args, **kwargs):
-        if self.request.method == 'GET':
-            messages = Message.objects.all()
-            return MessageSerializer(messages, many=True)
-
         data = self.request.data.copy()
         data['image'] = self._get_image(data)
-
         return MessageSerializer(data=data)
 
     def perform_create(self, serializer):
@@ -238,18 +233,26 @@ class MessageView(generics.ListCreateAPIView):
 
     def _get_image(self, data):
         if 'image_data_uri' not in data:
+            if 'image' in data:
+                return data['image']
             return None
 
-        image_b64 = data.pop('image_data_uri')[0]
-        fmt, image_str = image_b64.split(';base64,')
-        extension = fmt.split('/')[-1]
-
-        image_data = base64.b64decode(image_str)
-
-        extension = extension or imghdr.what(None, h=image_data) or "jpg"
+        data_uri = data.pop('image_data_uri')[0]
+        image_data, extension = decode_data_image(data_uri)
         return ContentFile(image_data, name=f'prompt_image.{extension}')
 
 
+def decode_data_image(data_uri):
+    fmt, image_str = data_uri.split(';base64,')
+    extension = fmt.split('/')[-1]
+
+    image_data = base64.b64decode(image_str)
+
+    extension = extension or imghdr.what(None, h=image_data) or "jpg"
+    return image_data, extension
+
+
+# todo: consider to delete the view
 @api_view(['GET', 'DELETE'])
 def message_detail(request, pk):
     try:
