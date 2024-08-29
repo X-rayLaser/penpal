@@ -291,6 +291,7 @@ def tools_specification(request):
     return Response({ 'spec': full_spec })
 
 
+# todo: delete it
 @api_view(['GET'])
 def find_api_call_view(request):
     text = request.query_params.get('text')
@@ -307,6 +308,7 @@ def find_api_call_view(request):
     return Response(res)
 
 
+# todo: delete it
 @api_view(['GET'])
 def call_api_view(request):
     name = request.query_params.get('name')

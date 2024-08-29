@@ -19,17 +19,15 @@ LLM_SETTINGS = {
 }
 
 TTS_BACKEND = {
-    "class": "tts.backends.RemoteTtsBackend",
+    "class": "tts.backends.DummyTtsBackend",
     "kwargs": {
-        "host": "tts_mock",
-        "port": 9300,
-        "use_tls": False
+        "audio_file": "test_data/sample.wav"
     }
 }
 
 
 STT_BACKEND = {
-    "class": "stt.backends.NullSpeechToTextBackend"
+    "class": "stt.backends.DummySpeechToTextBackend"
 }
 
 DATABASES = {

@@ -579,7 +579,6 @@ class MessageCreateTestCase(AbstractViewSetTestCase, EndPointCreateTests):
         data = dict(self.request_data)
         data.update(audio=audio_file)
 
-
         self.client.login(**self.credentials)
         resp = self.client.post(self.list_url, data=data)
 
@@ -587,6 +586,26 @@ class MessageCreateTestCase(AbstractViewSetTestCase, EndPointCreateTests):
         self.assertIsNotNone(models.Message.objects.first().audio)
         self.assertIsNone(resp.json()["audio"], resp.json())
         audio_file.close()
+
+
+class VoiceListTests(TestCase):
+    # todo: more tests for edge cases (network errors, etc.)
+    def test_list_voices(self):
+        resp = self.client.get('/chats/list-voices/')
+        self.assertEqual(200, resp.status_code)
+        expected = [{"voice_id": "Voice 1", "url": ""},
+                    {"voice_id": "Voice 2", "url": ""},
+                    {"voice_id": "Voice 3", "url": ""}]
+        self.assertEqual(expected, resp.json())
+
+
+class TranscribeSpeechTests(TestCase):
+    # todo: more tests for edge cases (network errors, etc.)
+    def test_transcribe(self):
+        resp = self.client.post('/chats/transcribe_speech/')
+        expected = dict(text="This is a speech transcribed by DummySpeechToTextBackend backend")
+        self.assertEqual(200, resp.status_code)
+        self.assertEqual(expected, resp.json())
 
 
 def default_preset_data():
@@ -830,10 +849,7 @@ def load_tests(loader, standard_tests, pattern):
     suite.addTest(unittest.defaultTestLoader.loadTestsFromTestCase(ChatCreateRetrieveDeleteTestCase))
     suite.addTest(unittest.defaultTestLoader.loadTestsFromTestCase(ChatPatchTestCase))
     suite.addTest(unittest.defaultTestLoader.loadTestsFromTestCase(MessageCreateTestCase))
-
-
-    suite.addTest(MessageCreateTestCase("test_anonymous_user_cannot_create_object"))
-    
+    suite.addTest(unittest.defaultTestLoader.loadTestsFromTestCase(VoiceListTests))
 
     for test_case in base_test_cases:
         suite.addTest(collect_crud_suite(test_case))

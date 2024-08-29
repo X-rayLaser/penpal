@@ -13,7 +13,6 @@ class NullSpeechToTextBackend(BaseSpeechToTextBackend):
 
 class DummySpeechToTextBackend(BaseSpeechToTextBackend):
     def __call__(self, audio):
-        print("Audio length: ", len(audio))
         return "This is a speech transcribed by DummySpeechToTextBackend backend"
 
 
