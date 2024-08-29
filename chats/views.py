@@ -165,6 +165,7 @@ def clear_llm_context(request):
 
 
 @api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def generate_reply(request):
     return _generate_completion(request)
 

@@ -9,7 +9,6 @@ router.register("system_messages", views.SystemMessageViewSet)
 router.register("presets", views.PresetViewSet)
 router.register("configurations", views.ConfigurationViewSet)
 router.register("chats", views.ChatViewSet)
-# todo: speech-samples urls do not seem to have usage
 router.register("speech-samples", views.SpeechSampleViewSet)
 
 urlpatterns = [

@@ -669,6 +669,12 @@ class TreeBankTests(TestCase):
         self.assertEqual(403, resp.status_code)
 
 
+class ReplyGenerationTests(TestCase):
+    def test_anonymous_user_cannot_generate_text(self):
+        resp = self.client.post("/chats/generate_reply/")
+        self.assertEqual(403, resp.status_code)
+
+
 def default_preset_data():
     return {
         'name': 'default',
@@ -913,6 +919,7 @@ def load_tests(loader, standard_tests, pattern):
     suite.addTest(unittest.defaultTestLoader.loadTestsFromTestCase(VoiceListTests))
     suite.addTest(unittest.defaultTestLoader.loadTestsFromTestCase(TranscribeSpeechTests))
     suite.addTest(unittest.defaultTestLoader.loadTestsFromTestCase(TreeBankTests))
+    suite.addTest(unittest.defaultTestLoader.loadTestsFromTestCase(ReplyGenerationTests))
 
     for test_case in base_test_cases:
         suite.addTest(collect_crud_suite(test_case))
