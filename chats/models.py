@@ -125,6 +125,15 @@ class Message(models.Model):
         
         return self.parent.replies.all()
 
+    def get_chat(self):
+        return self._get_chat(msg=self)
+
+    def _get_chat(self, msg):
+        try:
+            return msg.chat
+        except Message.chat.RelatedObjectDoesNotExist:
+            return self._get_chat(msg.parent)
+
 
 class Attachment(models.Model):
     original_name = models.CharField(max_length=512)

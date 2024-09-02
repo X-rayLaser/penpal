@@ -22,7 +22,7 @@ import {
 } from './tree';
 import { CollapsibleLLMSettings } from './presets';
 import { CollapsibleEditableSystemMessage } from './components';
-import { GenericFetchJson } from './generic_components';
+import { GenericFetchJson, csrftoken } from './generic_components';
 
 
 const LLAMA3_MODEL = "llama_3";
@@ -498,7 +498,10 @@ class ActiveChat extends React.Component {
         //handle errors gracefully
         const params = {
             method: "POST",
-            body: formData
+            body: formData,
+            headers: {
+                "X-CSRFToken": csrftoken
+            }
         };
 
         return fetch('/chats/messages/', params).then(

@@ -4,7 +4,7 @@ set -e
 
 if [ "$ENV" = 'DEV' ]; then
   echo "Running Development Server"
-  exec python3 manage.py runserver 0.0.0.0:8000
+  exec python3 -u manage.py runserver 0.0.0.0:8000
 elif [ "$ENV" = 'TEST' ]; then
   echo "Running Test Server"
   export DJANGO_SETTINGS_MODULE="mysite.test_settings"

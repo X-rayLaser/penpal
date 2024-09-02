@@ -212,6 +212,11 @@ class TreeBankDetailView(generics.RetrieveAPIView):
     def get_queryset(self):
         return Chat.objects.filter(user=self.request.user)
 
+    def retrieve(self, request, *args, **kwargs):
+        if not self.get_object().prompt:
+            return Response({}, status=status.HTTP_200_OK)
+        return super().retrieve(request, *args, **kwargs)
+
 
 class MessageView(generics.CreateAPIView):
     serializer_class = MessageSerializer
@@ -223,8 +228,14 @@ class MessageView(generics.CreateAPIView):
         return MessageSerializer(data=data)
 
     def perform_create(self, serializer):
-        chat_id = self.request.data["chat"]
-        chat = generics.get_object_or_404(Chat.objects.all(), pk=chat_id)
+        chat_id = self.request.data.get("chat")
+        if chat_id:
+            chat = generics.get_object_or_404(Chat.objects.all(), pk=chat_id)
+        else:
+            parent_id = self.request.data.get("parent")
+            parent = generics.get_object_or_404(Message.objects.all(), pk=parent_id)
+            chat = parent.get_chat()
+
         user_owns_parent = (self.request.user and self.request.user == chat.user)
         if not user_owns_parent:
             raise PermissionDenied("Only chat owners can add messages to their chats")

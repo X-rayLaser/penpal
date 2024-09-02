@@ -587,6 +587,42 @@ class MessageCreateTestCase(AbstractViewSetTestCase, EndPointCreateTests):
         self.assertIsNone(resp.json()["audio"], resp.json())
         audio_file.close()
 
+    def test_create_message_with_parent(self):
+        msg = models.Message.objects.create(text="First msg", chat=self.chat)
+        self.chat.prompt = msg
+        self.chat.save()
+
+        data = {
+            "text": "Second msg",
+            "parent": msg.id
+        }
+
+        self.client.login(**self.credentials)
+        resp = self.client.post(self.list_url, data=data)
+
+        self.assertEqual(201, resp.status_code)
+        self.assertEqual("Second msg", resp.json()["text"])
+
+    def test_create_message_on_nth_level_depth(self):
+        first_msg = models.Message.objects.create(text="First msg", chat=self.chat)
+        self.chat.prompt = first_msg
+        self.chat.save()
+
+        second_msg = models.Message.objects.create(text="Second msg", parent=first_msg)
+        third_msg = models.Message.objects.create(text="Third msg", parent=second_msg)
+
+        data = {
+            "text": "Fourth msg",
+            "parent": third_msg.id
+        }
+
+        self.client.login(**self.credentials)
+        resp = self.client.post(self.list_url, data=data)
+
+        self.assertEqual(201, resp.status_code)
+        self.assertEqual("Fourth msg", resp.json()["text"])
+
+        # todo: more tests: unauthorized message create at nth level, missing parent ids, chat_ids, etc.
 
 class VoiceListTests(TestCase):
     # todo: more tests for edge cases (network errors, etc.)
@@ -658,7 +694,7 @@ class TreeBankTests(TestCase):
         first, second = resp.json()["replies"]
         self.assertEqual("Response 1", first["text"])
         self.assertEqual("Response 2", second["text"])
-        
+
     def test_cannot_get_non_existing_object(self):
         self.client.login(**self.credentials)
         resp = self.client.get(self.obj_url.format(14))
@@ -667,6 +703,19 @@ class TreeBankTests(TestCase):
     def test_anonymous_user_cannot_get_non_existing_object(self):
         resp = self.client.get(self.obj_url.format(14))
         self.assertEqual(403, resp.status_code)
+
+
+class EmptyTreeBankTests(TestCase):
+    def test_logged_user_receives_empty_dict_for_empty_chat_tree(self):
+        credentials = dict(username="user", password="password")
+        user = User.objects.create_user(**credentials)
+        models.Chat.objects.create(user=user)
+
+        self.client.login(**credentials)
+        resp = self.client.get('/chats/treebanks/1/')
+
+        self.assertEqual(200, resp.status_code)
+        self.assertEqual({}, resp.json())
 
 
 class ReplyGenerationTests(TestCase):
@@ -920,6 +969,7 @@ def load_tests(loader, standard_tests, pattern):
     suite.addTest(unittest.defaultTestLoader.loadTestsFromTestCase(TranscribeSpeechTests))
     suite.addTest(unittest.defaultTestLoader.loadTestsFromTestCase(TreeBankTests))
     suite.addTest(unittest.defaultTestLoader.loadTestsFromTestCase(ReplyGenerationTests))
+    suite.addTest(unittest.defaultTestLoader.loadTestsFromTestCase(EmptyTreeBankTests))
 
     for test_case in base_test_cases:
         suite.addTest(collect_crud_suite(test_case))

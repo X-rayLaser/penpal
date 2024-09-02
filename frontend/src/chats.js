@@ -117,9 +117,11 @@ class ChatsList extends React.Component {
                 name_to_config[conf.name] = conf;
             });
 
+            let selected_name = data.length > 0 ? data[0].name : ""
+
             this.setState({
                 configs: data,
-                selected_name: data[0].name,
+                selected_name,
                 name_to_config,
                 loading_configs: false
             })
