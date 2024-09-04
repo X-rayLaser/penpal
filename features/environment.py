@@ -15,9 +15,6 @@ options.add_argument('--headless=new')
 options.add_argument('--no-sandbox')
 
 
-#def before_all(context):
-#    use_fixture(django_test_runner, context)
-
 def before_scenario(context, scenario):
     use_fixture(django_test_runner, context)
     use_fixture(django_test_case, context)
@@ -33,9 +30,14 @@ def after_scenario(context, scenario):
     context.browser.close()
 
 
-def run_cmd(cmd):
-    res = subprocess.run(cmd, shell=True, check=True, capture_output=True)
-    if res.stdout:
-        print(res.stdout)
-    if res.stderr:
-        print(res.stderr)
+def after_step(context, step):
+    for log in context.browser.get_log('browser'):
+        print(log)
+
+    name = clean_name(step.name)
+    context.browser.save_screenshot(f'/data/{name}.png')
+
+
+def clean_name(name):
+    name = name.replace(' ', '-').replace('-', '_')
+    return ''.join([ch for ch in name if ch == '_' or ch.isalpha()])

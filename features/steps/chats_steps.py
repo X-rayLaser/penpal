@@ -67,7 +67,7 @@ def step_impl(context):
 @when('user clicks "Regenerate" button')
 def step_impl(context):
     button = context.browser.find_element(by=By.XPATH, value='//button[contains(text(), "Regenerate")]')
-    button.click()
+    ActionChains(context.browser).move_to_element(button).click().perform()
 
 
 @then('user can see two responses from AI')

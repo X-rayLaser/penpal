@@ -8,6 +8,13 @@ from django.test import Client
 from django.conf import settings
 
 
+def get_base_url(test_case):
+    url = test_case.live_server_url
+    port = url.split(':')[-1]
+    docker_bridge = '172.17.0.1'
+    return f'http://{docker_bridge}:{port}'
+
+
 @given('user is authenticated')
 def step_impl(context):
     credentials = dict(username='user', password='password')
@@ -17,14 +24,10 @@ def step_impl(context):
 
     cookie = client.cookies['sessionid']
 
-    req = HttpRequest()
-    req.session = SessionStore(cookie.value)
-    user = get_user(req)
-    assert user.username == 'user'
-    context.browser.get(context.live_server_url)
+    url = get_base_url(context.test_case)
+    context.browser.get(url)
     
     time.sleep(10)
-    print('URL:', context.live_server_url)
     context.cookie = {
         'name': 'sessionid',
         'value': cookie.value,
@@ -38,11 +41,9 @@ def step_impl(context):
 
 @when('user visits the "{path}" page')
 def step_impl(context, path):
-    url = f'{context.live_server_url}{path}'
+    base_url = get_base_url(context.test_case)
+    url = f'{base_url}{path}'
     context.browser.get(url)
-
-    for log in context.browser.get_log('browser'): print(log)
-    context.browser.save_screenshot(f'/data/my-{path}.png')
 
 
 @when('user reloads the "{path}" page')
