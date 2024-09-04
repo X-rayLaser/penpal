@@ -15,3 +15,5 @@ test_data/
 installed_models
 media/
 mysite/secrets.py
+chrome-linux64/
+chromedriver-linux64/

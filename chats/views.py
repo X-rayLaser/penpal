@@ -229,12 +229,12 @@ class MessageView(generics.CreateAPIView):
 
     def perform_create(self, serializer):
         chat_id = self.request.data.get("chat")
-        if chat_id:
-            chat = generics.get_object_or_404(Chat.objects.all(), pk=chat_id)
-        else:
+        if chat_id is None:
             parent_id = self.request.data.get("parent")
             parent = generics.get_object_or_404(Message.objects.all(), pk=parent_id)
             chat = parent.get_chat()
+        else:
+            chat = generics.get_object_or_404(Chat.objects.all(), pk=chat_id)
 
         user_owns_parent = (self.request.user and self.request.user == chat.user)
         if not user_owns_parent:

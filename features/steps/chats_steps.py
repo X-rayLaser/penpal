@@ -38,7 +38,8 @@ def step_impl(context, message):
     text_area.send_keys(message)
 
     button = context.browser.find_element(by=By.XPATH, value='//button[@type="submit"]')
-    button.click()
+    ActionChains(context.browser).move_to_element(button).click().perform()
+
     context.message = message
 
 

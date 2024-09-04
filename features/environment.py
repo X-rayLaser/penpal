@@ -1,36 +1,36 @@
-from selenium import webdriver
+import os
+import time
 import subprocess
+from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from behave import use_fixture
+from mysite.behave_fixtures import django_test_runner, django_test_case
+service = Service(executable_path="/app/chromedriver-linux64/chromedriver")
+os.environ["DJANGO_SETTINGS_MODULE"] = "mysite.test_settings"
+
 options = Options()
-options.binary_location = "chrome-linux64/chrome"
+options.binary_location = "/app/chrome-linux64/chrome"
+options.add_argument('--headless=new')
+options.add_argument('--no-sandbox')
 
 
-def before_all(context):
-    pass
-
+#def before_all(context):
+#    use_fixture(django_test_runner, context)
 
 def before_scenario(context, scenario):
-    start_app()
-    driver = webdriver.Chrome(options=options)
+    use_fixture(django_test_runner, context)
+    use_fixture(django_test_case, context)
+
+    driver = webdriver.Chrome(options=options, service=service)
     driver.implicitly_wait(2)
     context.browser = driver
 
 
 def after_scenario(context, scenario):
-    import time
+    context.browser.save_screenshot(f'/data/{scenario.name}.png')
     time.sleep(5)
     context.browser.close()
-    stop_app()
-
-
-def start_app():
-    run_cmd("export ENV=TEST && docker-compose up -d")
-    import time
-    time.sleep(28)
-
-
-def stop_app():
-    run_cmd("docker-compose stop")
 
 
 def run_cmd(cmd):

@@ -603,7 +603,7 @@ class MessageCreateTestCase(AbstractViewSetTestCase, EndPointCreateTests):
         self.assertEqual(201, resp.status_code)
         self.assertEqual("Second msg", resp.json()["text"])
 
-    def test_create_message_on_nth_level_depth(self):
+    def test_create_message_at_nth_level_depth(self):
         first_msg = models.Message.objects.create(text="First msg", chat=self.chat)
         self.chat.prompt = first_msg
         self.chat.save()

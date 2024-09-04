@@ -12,6 +12,7 @@ Feature: Creating a chat and chatting
     And user reloads the "/#my-chats" page
     Then user cannot see any chats on the page
 
+    @ws
     Scenario: Authenticated user creates chat, sends text message to AI and receives a response
     Given user is authenticated
     When user visits the "/#configurations" page
@@ -24,7 +25,7 @@ Feature: Creating a chat and chatting
     When user waits for "5" seconds
     Then user can see a response from an AI
 
-    @new
+    @ws
     Scenario: Authenticated user creates chat, sends text message to AI and receives a response and regenerates it
     
     Given user is authenticated

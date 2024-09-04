@@ -15,6 +15,10 @@ services:
       - assets:/app/frontend/public
     links:
       - redis
+    depends_on:
+      - celery
+      - redis
+      - websocketserver
 
   celery:
     build:
@@ -28,6 +32,9 @@ services:
       - db_data:/data
     links:
       - redis
+    depends_on:
+      - redis
+      - websocketserver
     command: celery -A mysite worker -l INFO
 
   websocketserver:
@@ -37,6 +44,8 @@ services:
     volumes:
       - ./:/app
     links:
+      - redis
+    depends_on:
       - redis
     ports:
       - "9000:9000"
@@ -60,9 +69,9 @@ services:
       dockerfile: ./docker/tts_mock.Dockerfile
     volumes:
       - ./tts_server_mock:/tts_server_mock
+    
 
 volumes:
   db_data:
   assets:
   secrets:
-  

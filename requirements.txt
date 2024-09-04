@@ -9,6 +9,8 @@ django-allauth
 olefile
 bleach
 pypdf
+Pillow
 gunicorn
 whitenoise
 behave
+selenium

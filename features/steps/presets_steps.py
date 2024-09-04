@@ -7,6 +7,7 @@ from selenium.webdriver.common.action_chains import ActionChains
 
 @when('user fills out the preset form for new preset "selenium_preset"')
 def step_impl(context):
+    print( 'cookies in filling out:', context.browser.get_cookies())
     name_field = context.browser.find_element(by=By.ID, value="new_preset_name")
     name_field.send_keys("selenium_preset")
     name_field.send_keys(keys.Keys.ENTER)
@@ -31,10 +32,10 @@ def step_impl(context):
 def step_impl(context):
     time.sleep(5)
     button = context.browser.find_element(by=By.CLASS_NAME, value="accordion-button")
-    button.click()
+    ActionChains(context.browser).move_to_element(button).click().perform()
+
     time.sleep(1)
     button = context.browser.find_element(by=By.CLASS_NAME, value="btn-danger")
-
     ActionChains(context.browser).move_to_element(button).click().perform()
 
 

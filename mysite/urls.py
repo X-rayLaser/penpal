@@ -22,7 +22,10 @@ from django.conf.urls.static import static
 from django.conf import settings
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
+from django.views.decorators.csrf import ensure_csrf_cookie
 
+
+@ensure_csrf_cookie
 def spa(request):
     return render(request, 'spa.html')
 
