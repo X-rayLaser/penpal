@@ -98,21 +98,21 @@ class ConfigurationViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, permissions.IsOwner]
 
     def perform_create(self, serializer):
-        self.validate_ownership(serializer.validated_data)
+        self.validate_ownership(serializer)
         serializer.save(user=self.request.user)
 
     def perform_update(self, seriializer):
-        self.validate_ownership(seriializer.validated_data)
+        self.validate_ownership(seriializer)
         super().perform_update(seriializer)
 
-    def validate_ownership(self, validated_data):
-        preset = validated_data.get("preset")
-        msg = validated_data.get("system_message")
+    def validate_ownership(self, serializer):
+        preset = serializer.validated_data.get("preset")
+        msg = serializer.validated_data.get("system_message")
         user = self.request.user
         
         if (preset and preset.user != user) or (msg and msg.user != user):
             raise PermissionDenied(
-                "Cannot create objects with relation owned by different user"
+                "Cannot associate object with relation owned by different user"
             )
 
     def get_queryset(self):
@@ -209,7 +209,19 @@ class ChatViewSet(viewsets.ModelViewSet):
     http_method_names = ['get', 'post', 'patch', 'delete', 'head', 'options', 'trace']
 
     def perform_create(self, serializer):
+        self.validate_ownership(serializer)
         serializer.save(user=self.request.user)
+
+    def perform_update(self, serializer):
+        self.validate_ownership(serializer)
+        return super().perform_update(serializer)
+
+    def validate_ownership(self, serializer):
+        config = serializer.validated_data.get("configuration")
+        if config and config.user != self.request.user:
+            raise PermissionDenied(
+                "Cannot associate object with relation owned by different user"
+            )
 
     def get_queryset(self):
         return Chat.objects.filter(user=self.request.user)

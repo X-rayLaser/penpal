@@ -6,16 +6,20 @@ from chats.tests.common import (
 )
 
 
-class ConfigurationTestCase(TestCase):
-    list_url = "/chats/configurations/"
-    obj_url = "/chats/configurations/{}/"
-
+class BaseTestCase(TestCase):
     def setUp(self) -> None:
         self.credentials = dict(username="user", password="password")
         self.user = User.objects.create_user(**self.credentials)
 
         self.stranger_credentials = dict(username="stranger", password="stranger")
         self.stranger = User.objects.create_user(**self.stranger_credentials)
+
+        self.json_sender = JsonSender(self.client)
+
+
+class ConfigurationTestCase(BaseTestCase):
+    list_url = "/chats/configurations/"
+    obj_url = "/chats/configurations/{}/"
 
 
 class ConfigurationCreationPermissionsTests(ConfigurationTestCase):
@@ -25,7 +29,7 @@ class ConfigurationCreationPermissionsTests(ConfigurationTestCase):
         conf_data = prepare_conf_data(preset, msg)
 
         self.client.login(**self.credentials)
-        resp = self.client.post(self.list_url, data=conf_data, content_type='application/json')
+        resp = self.json_sender.post(self.list_url, data=conf_data)
 
         self.assertEqual(403, resp.status_code)
 
@@ -35,7 +39,7 @@ class ConfigurationCreationPermissionsTests(ConfigurationTestCase):
         conf_data = prepare_conf_data(preset, msg)
 
         self.client.login(**self.credentials)
-        resp = self.client.post(self.list_url, data=conf_data, content_type='application/json')
+        resp = self.json_sender.post(self.list_url, data=conf_data)
 
         self.assertEqual(403, resp.status_code)
 
@@ -45,7 +49,7 @@ class ConfigurationCreationPermissionsTests(ConfigurationTestCase):
         conf_data = prepare_conf_data(preset, msg)
 
         self.client.login(**self.credentials)
-        resp = self.client.post(self.list_url, data=conf_data, content_type='application/json')
+        resp = self.json_sender.post(self.list_url, data=conf_data)
 
         self.assertEqual(403, resp.status_code)
 
@@ -57,7 +61,7 @@ class ConfigurationWithOptionalFieldsTests(ConfigurationTestCase):
         del conf_data["preset"]
 
         self.client.login(**self.credentials)
-        resp = self.client.post(self.list_url, data=conf_data, content_type='application/json')
+        resp = self.json_sender.post(self.list_url, data=conf_data)
 
         self.assertEqual(201, resp.status_code)
 
@@ -67,7 +71,7 @@ class ConfigurationWithOptionalFieldsTests(ConfigurationTestCase):
         del conf_data["system_message"]
 
         self.client.login(**self.credentials)
-        resp = self.client.post(self.list_url, data=conf_data, content_type='application/json')
+        resp = self.json_sender.post(self.list_url, data=conf_data)
 
         self.assertEqual(201, resp.status_code)
 
@@ -77,7 +81,7 @@ class ConfigurationWithOptionalFieldsTests(ConfigurationTestCase):
         del conf_data["system_message"]
 
         self.client.login(**self.credentials)
-        resp = self.client.post(self.list_url, data=conf_data, content_type='application/json')
+        resp = self.json_sender.post(self.list_url, data=conf_data)
 
         self.assertEqual(201, resp.status_code)
 
@@ -113,11 +117,51 @@ class ConfigurationUpdatePermissionTests(ConfigurationTestCase):
     def assertUpdateForbidden(self, put_data, patch_data):
         obj_url = self.obj_url.format(1)
         self.client.login(**self.credentials)
-        resp = self.client.put(obj_url, data=put_data, content_type='application/json')
+        resp = self.json_sender.put(obj_url, data=put_data)
         self.assertEqual(403, resp.status_code, resp.json())
 
-        resp = self.client.patch(obj_url, data=patch_data, content_type='application/json')
+        resp = self.json_sender.patch(obj_url, data=patch_data)
         self.assertEqual(403, resp.status_code, resp.json())
+
+
+class ChatTestCase(BaseTestCase):
+    list_url = "/chats/chats/"
+    obj_url = "/chats/chats/{}/"
+
+
+class ChatCreatePermissionTests(ChatTestCase):
+    def test_user_cannot_create_chat_with_other_user_config(self):
+        config_data = default_configuration_data(self.stranger)
+        config = models.Configuration.objects.create(**config_data)
+
+        data = dict(configuration=config.id)
+
+        self.client.login(**self.credentials)
+        resp = self.json_sender.post(self.list_url, data=data)
+        self.assertEqual(403, resp.status_code, resp.json())
+
+    def test_config_is_required(self):
+        self.client.login(**self.credentials)
+        resp = self.json_sender.post(self.list_url, data={})
+        self.assertEqual(400, resp.status_code, resp.json())
+
+
+class ChatUpdatePermissionTests(ChatTestCase):
+    def test_user_cannot_update_chat_with_other_user_config(self):
+        config_data = default_configuration_data(self.user)
+        config = models.Configuration.objects.create(**config_data)
+
+        chat = models.Chat.objects.create(user=self.user, configuration=config)
+
+        other_config_data = prepare_conf_data(preset=None, msg=None)
+        other_config = models.Configuration.objects.create(user=self.stranger, **other_config_data)
+        data = dict(configuration=other_config.id)
+
+        obj_url = self.obj_url.format(1)
+        self.client.login(**self.credentials)
+
+        resp = self.json_sender.patch(obj_url, data)
+        self.assertEqual(403, resp.status_code)
 
 
 def prepare_preset(preset_owner):
@@ -141,3 +185,21 @@ def prepare_conf_data(preset, msg):
         'preset': preset and preset.id,
         'tools': [],
     }
+
+
+class JsonSender:
+    def __init__(self, client):
+        self.client = client
+
+    def post(self, url, data):
+        return self._send('post', url, data=data)
+
+    def put(self, url, data):
+        return self._send('put', url, data=data)
+
+    def patch(self, url, data):
+        return self._send('patch', url, data=data)
+
+    def _send(self, method_name, url, data):
+        method = getattr(self.client, method_name)
+        return method(url, data, content_type='application/json')
