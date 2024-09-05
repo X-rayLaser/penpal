@@ -97,9 +97,23 @@ class ConfigurationViewSet(viewsets.ModelViewSet):
     queryset = Configuration.objects.all()
     permission_classes = [IsAuthenticated, permissions.IsOwner]
 
-
     def perform_create(self, serializer):
+        self.validate_ownership(serializer.validated_data)
         serializer.save(user=self.request.user)
+
+    def perform_update(self, seriializer):
+        self.validate_ownership(seriializer.validated_data)
+        super().perform_update(seriializer)
+
+    def validate_ownership(self, validated_data):
+        preset = validated_data.get("preset")
+        msg = validated_data.get("system_message")
+        user = self.request.user
+        
+        if (preset and preset.user != user) or (msg and msg.user != user):
+            raise PermissionDenied(
+                "Cannot create objects with relation owned by different user"
+            )
 
     def get_queryset(self):
         return Configuration.objects.filter(user=self.request.user)

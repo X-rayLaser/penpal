@@ -5,6 +5,7 @@ from io import BytesIO
 from dataclasses import dataclass
 from django.test import TestCase
 from django.contrib.auth.models import User
+from chats.tests.common import default_configuration_data, default_preset_data, default_system_msg_data
 from tools.api_calls import TaggedApiCallBackend, ApiFunctionCall, ApiCallNotFoundError
 from chats import models, serializers
 from django.db.models import Model
@@ -722,44 +723,6 @@ class ReplyGenerationTests(TestCase):
     def test_anonymous_user_cannot_generate_text(self):
         resp = self.client.post("/chats/generate_reply/")
         self.assertEqual(403, resp.status_code)
-
-
-def default_preset_data():
-    return {
-        'name': 'default',
-        'temperature': 0.1,
-        'top_k': 40,
-        'top_p': 0.95,
-        'min_p': 0.05,
-        'repeat_penalty': 1.1,
-        'n_predict': 512
-    }
-
-
-def default_system_msg_data():
-    return {
-        "name": "assistant",
-        "text": "You are a helpful assistant"
-    }
-
-
-def default_configuration_data(user):
-    preset = models.Preset.objects.create(user=user, **default_preset_data())
-    system_msg = models.SystemMessage.objects.create(user=user, **default_system_msg_data())
-
-    return {
-        'user': user,
-        'name': 'myconf',
-        'model_repo': 'myrepo',
-        'file_name': 'myfile',
-        'launch_params': {
-            'p1': 10,
-            'p2': 20
-        },
-        'system_message': system_msg,
-        'preset': preset,
-        'tools': [],
-    }
 
 
 @dataclass
