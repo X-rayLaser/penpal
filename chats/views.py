@@ -19,6 +19,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import get_object_or_404
 from django.core.files.base import ContentFile
 from django.conf import settings
+from rest_framework.serializers import ValidationError
 
 from .models import SystemMessage, Preset, Configuration, Chat, Message, SpeechSample
 from .serializers import (
@@ -256,8 +257,11 @@ class MessageView(generics.CreateAPIView):
 
     def perform_create(self, serializer):
         chat_id = self.request.data.get("chat")
+
         if chat_id is None:
             parent_id = self.request.data.get("parent")
+            if parent_id is None:
+                raise ValidationError('Expected exactly one of ["chat", "parent"] fields. Got neither')
             parent = generics.get_object_or_404(Message.objects.all(), pk=parent_id)
             chat = parent.get_chat()
         else:

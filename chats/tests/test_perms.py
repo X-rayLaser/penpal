@@ -161,8 +161,6 @@ class ChatCreatePermissionTests(ChatTestCase):
         self.assertEqual("**No data yet**", resp.json()["prompt_text"])
         self.assertEqual(first_prompt_id, models.Chat.objects.get(pk=first_chat_id).prompt.id)
 
-        # todo similar test, but to update method
-
     def test_config_is_required(self):
         self.client.login(**self.credentials)
         resp = self.json_sender.post(self.list_url, data={})
@@ -205,6 +203,50 @@ class ChatUpdatePermissionTests(ChatTestCase):
 
         self.assertEqual(200, resp.status_code)
         self.assertEqual(prompt_msg_id, models.Chat.objects.get(pk=chat_id).prompt.id)
+
+
+class MessageTests(BaseTestCase):
+    list_url = "/chats/messages/"
+    obj_url = "/chats/messages/{}/"
+
+    def test_child_message_cannot_have_chat_relation(self):
+        config_data = default_configuration_data(self.user)
+        config = models.Configuration.objects.create(**config_data)
+
+        msg1 = models.Message.objects.create(text="First msg")
+        chat = models.Chat.objects.create(user=self.user, prompt=msg1, configuration=config)
+
+        request_data = dict(text="second msg", parent=msg1.id, chat=chat.id)
+        self.assertCannotCreateMessage(self.credentials, request_data, 400)
+
+    def test_cannot_create_orphan_message(self):
+        request_data = dict(text="second msg")
+        self.assertCannotCreateMessage(self.credentials, request_data, status_code=400)
+
+    def test_cannot_add_prompt_to_other_person_chat(self):
+        config_data = default_configuration_data(self.user)
+        config = models.Configuration.objects.create(**config_data)
+        chat = models.Chat.objects.create(user=self.user, configuration=config)
+
+        request_data = dict(text="prompt message from stranger", chat=chat.id)
+        self.assertCannotCreateMessage(self.stranger_credentials, request_data, 403)
+
+    def test_cannot_add_message_to_message_in_other_user_chat(self):
+        config_data = default_configuration_data(self.user)
+        config = models.Configuration.objects.create(**config_data)
+
+        msg1 = models.Message.objects.create(text="First msg")
+        chat = models.Chat.objects.create(user=self.user, prompt=msg1, configuration=config)
+        
+        msg2 = models.Message.objects.create(text="Second msg", parent=msg1)
+
+        request_data = dict(text="prompt message from stranger", parent=msg2.id)
+        self.assertCannotCreateMessage(self.stranger_credentials, request_data, 403)
+
+    def assertCannotCreateMessage(self, credentials, request_data, status_code):
+        self.client.login(**credentials)
+        resp = self.json_sender.post(self.list_url, request_data)
+        self.assertEqual(status_code, resp.status_code)
 
 
 def prepare_preset(preset_owner):

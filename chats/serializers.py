@@ -142,6 +142,8 @@ class MessageSerializer(serializers.ModelSerializer):
                 Attachment.objects.create(original_name=file_path, file=attach, message=obj)
 
         if "chat" in validated_data:
+            if "parent" in validated_data:
+                raise serializers.ValidationError('Expected exactly one of ["chat", "parent"] fields. Got both.')
             obj.chat = validated_data["chat"]
             obj.save()
             obj.chat.save()
