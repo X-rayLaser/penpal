@@ -218,6 +218,7 @@ class ChatViewSet(viewsets.ModelViewSet):
 
     def validate_ownership(self, serializer):
         config = serializer.validated_data.get("configuration")
+ 
         if config and config.user != self.request.user:
             raise PermissionDenied(
                 "Cannot associate object with relation owned by different user"

@@ -140,6 +140,29 @@ class ChatCreatePermissionTests(ChatTestCase):
         resp = self.json_sender.post(self.list_url, data=data)
         self.assertEqual(403, resp.status_code, resp.json())
 
+    def test_user_cannot_create_chat_with_prompt_object_of_other_chat(self):
+        config_data = default_configuration_data(self.stranger)
+        config = models.Configuration.objects.create(**config_data)
+
+        first_prompt = models.Message.objects.create(text="First prompt")
+        first_prompt_id = first_prompt.id
+        chat = models.Chat.objects.create(user=self.stranger, prompt=first_prompt, configuration=config)
+        first_chat_id = chat.id
+
+        new_conf_data = prepare_conf_data(preset=None, msg=None)
+        new_conf = models.Configuration.objects.create(user=self.user, **new_conf_data)
+
+        new_chat_data = dict(configuration=new_conf.id, prompt=first_prompt.id)
+
+        self.client.login(**self.credentials)
+        resp = self.json_sender.post(self.list_url, data=new_chat_data)
+
+        self.assertEqual(201, resp.status_code, resp.json())
+        self.assertEqual("**No data yet**", resp.json()["prompt_text"])
+        self.assertEqual(first_prompt_id, models.Chat.objects.get(pk=first_chat_id).prompt.id)
+
+        # todo similar test, but to update method
+
     def test_config_is_required(self):
         self.client.login(**self.credentials)
         resp = self.json_sender.post(self.list_url, data={})
@@ -150,8 +173,7 @@ class ChatUpdatePermissionTests(ChatTestCase):
     def test_user_cannot_update_chat_with_other_user_config(self):
         config_data = default_configuration_data(self.user)
         config = models.Configuration.objects.create(**config_data)
-
-        chat = models.Chat.objects.create(user=self.user, configuration=config)
+        models.Chat.objects.create(user=self.user, configuration=config)
 
         other_config_data = prepare_conf_data(preset=None, msg=None)
         other_config = models.Configuration.objects.create(user=self.stranger, **other_config_data)
@@ -162,6 +184,27 @@ class ChatUpdatePermissionTests(ChatTestCase):
 
         resp = self.json_sender.patch(obj_url, data)
         self.assertEqual(403, resp.status_code)
+
+    def test_user_cannot_update_chat_with_prompt_object_of_other_chat(self):
+        config_data = default_configuration_data(self.user)
+        config = models.Configuration.objects.create(**config_data)
+        models.Chat.objects.create(user=self.user, configuration=config)
+
+        new_conf_data = prepare_conf_data(preset=None, msg=None)
+        new_conf = models.Configuration.objects.create(user=self.stranger, **new_conf_data)
+
+        prompt_msg = models.Message.objects.create(text="First prompt")
+        prompt_msg_id = prompt_msg.id
+        chat = models.Chat.objects.create(user=self.stranger, prompt=prompt_msg, configuration=new_conf)
+        chat_id = chat.id
+
+        request_data = dict(prompt=prompt_msg.id)
+        self.client.login(**self.credentials)
+        obj_url = self.obj_url.format(1)
+        resp = self.json_sender.patch(obj_url, request_data)
+
+        self.assertEqual(200, resp.status_code)
+        self.assertEqual(prompt_msg_id, models.Chat.objects.get(pk=chat_id).prompt.id)
 
 
 def prepare_preset(preset_owner):
