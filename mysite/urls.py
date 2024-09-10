@@ -24,7 +24,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from django.views.decorators.csrf import ensure_csrf_cookie
 
-
+# todo: login required decorator
 @ensure_csrf_cookie
 def spa(request):
     return render(request, 'spa.html')

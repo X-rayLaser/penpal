@@ -10,6 +10,7 @@ TOKEN_STREAM = "token_stream"
 SPEECH_STREAM = "speech_stream"
 STOP_SPEECH = "[|END_OF_SPEECH|]"
 
+BUILD_EVENTS = "build_events"
 
 async def handler(websocket):
     async with r.pubsub() as pubsub:
@@ -18,8 +19,9 @@ async def handler(websocket):
 
         token_channel = f'{TOKEN_STREAM}:{socket_session_id}'
         speech_channel = f'{SPEECH_STREAM}:{socket_session_id}'
+        builds_channel = f'{BUILD_EVENTS}:{socket_session_id}'
 
-        await pubsub.subscribe(token_channel, speech_channel)
+        await pubsub.subscribe(token_channel, speech_channel, builds_channel)
         
         while True:
             message = await pubsub.get_message(ignore_subscribe_messages=True)
@@ -41,6 +43,14 @@ async def handler(websocket):
                             'event': 'speech_sample_arrived',
                             'data': d
                         })
+                elif channel == builds_channel:
+                    event_data = json.loads(text)
+                    print('build channel data', event_data)
+                    build_event = event_data['build_event']
+                    message = json.dumps({
+                        'event': build_event,
+                        'data': event_data
+                    })
                 else:
                     print("Unknown channel:", channel)
 

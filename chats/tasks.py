@@ -278,6 +278,30 @@ class ToolAugmentedTextGenerator:
                 response_text += finalized_segment
                 generated_text = ''
             else:
+
+                code_invocation = find_code(generated_text)
+                if code_invocation is not None:
+                    prefix, code, language = code_invocation
+
+                    def on_split(build_id, files):
+                        self.process_build_start(build_id, files)
+                    
+                    def on_result(build_id, res):
+                        self.process_build_finished(build_id, res)
+
+                    interpreter = WebInterpreter(on_split, on_result)
+                    output = interpreter(prefix, code)
+
+                    finalized_segment = f'{prefix}```\n{code}```\n{output}'
+
+                    generation_spec.prompt = self.chat_renderer_cls.concatenate(
+                        generation_spec.prompt, finalized_segment
+                    )
+
+                    response_text += finalized_segment
+                    generated_text = ''
+                    break
+
                 response_text += generated_text
                 break
 
@@ -302,24 +326,157 @@ class ToolAugmentedTextGenerator:
     def process_api_call_segment(self, text):
         pass
 
+    def process_build_start(self, build_id, files):
+        pass
+
+    def process_build_finished(self, build_id, res: dict):
+        pass
+
+
+def find_code(response):
+    start_str = end_str = "```"
+    language = None
+
+    PYTHON_LANG = 'python'
+    JS_LANG = 'javascript'
+
+    try:
+        idx_start = response.index(start_str)
+        prefix = response[:idx_start]
+        try:
+            idx_end = response.index(end_str, idx_start+1)
+        except ValueError:
+            idx_end = len(response)
+
+        code = response[idx_start + len(start_str):idx_end]
+
+        if code.lower().startswith(PYTHON_LANG):
+            language = PYTHON_LANG
+        
+        if code.lower().startswith(JS_LANG):
+            language = JS_LANG
+
+        return prefix, code, language
+    except ValueError:
+        return None
+
+
+class WebInterpreter:
+    def __init__(self, on_split, on_result):
+        self.on_split = on_split
+        self.on_result = on_result
+
+        self.files = []
+
+        import uuid
+        self.build_id = uuid.uuid4().hex
+
+    def __call__(self, prefix, code, language=None):
+        try:
+            js_code, css_code = self.split_code(code)
+            files = [{
+                'name': 'js_code',
+                'content': js_code
+            }, {
+                'name': 'css_code',
+                'content': css_code
+            }]
+            self.files = files
+            self.on_split(self.build_id, files)
+        except ValueError:
+            output = 'Error: Missing mandatory javascript code block'
+            text = f'WEBPACK CONSOLE START\n{output}\nWEBPACK CONSOLE END'
+            return text
+        else:
+            return self.send_code(js_code, css_code)
+
+    def split_code(self, code):
+        _, js_start = self.get_lang_section_start(code, 'javascript')
+
+        try:
+            js_end, css_start = self.get_lang_section_start(code, 'css')
+            css_code = code[css_start:]
+        except ValueError:
+            css_code = ''
+            js_end = len(code)
+
+        js_code = code[js_start:js_end]
+        return js_code, css_code
+
+    def send_code(self, js_code, css_code):
+        try:
+            result = react_app_maker(js_code, css_code)
+            webpack_logs = result["logs"]["webpack"]
+            stdout = webpack_logs["stdout"]
+            stderr = webpack_logs["stderr"]
+            return_code = webpack_logs["return_code"]
+            success = webpack_logs["build_success"]
+
+            status = 'success' if success else 'error'
+            res = dict(status=status, return_code=return_code, stdout=stdout, stderr=stderr, files=self.files, url='http://localhost/')
+ 
+            output = f'Successful build: {success}\nReturn code: {return_code}\nStandard Output Stream:\n{stdout}\nStandard Error Stream:\n{stderr}\n'
+
+            text = f'WEBPACK CONSOLE START\n{output}\nWEBPACK CONSOLE END'
+            return text
+        except Exception as e:
+            res = dict(status='error', return_code=999, stderr=str(e), files=self.files)
+            return f'problem: {str(e)}'
+        finally:
+            self.on_result(self.build_id, res)
+
+    def get_lang_section_start(self, code, lang_marker):
+        idx = code.index(lang_marker)
+        return idx, idx + len(lang_marker)
+
+
+def react_app_maker(component_code: str, css_code: str):
+    import requests
+
+    data = {
+        "js_code": component_code,
+        "css_code": css_code
+    }
+    endpoint = "http://172.17.0.1:9900/make_react_app/"
+    headers = headers={'content-type': 'application/json'}
+    resp = requests.post(endpoint, data=json.dumps(data), headers=headers)
+
+    if resp.ok:
+        return resp.json()
+    raise Exception(f'Failed to create app: "{resp.reason}"')
+
 
 class Producer(ToolAugmentedTextGenerator):
-    def __init__(self, queue, redis_obj, redis_channel, chat_renderer_cls):
+    def __init__(self, queue, redis_obj, tokens_channel, builds_channel, chat_renderer_cls):
         super().__init__(chat_renderer_cls)
         self.queue = queue
         self.redis_obj = redis_obj
-        self.redis_channel = redis_channel
+        self.tokens_channel = tokens_channel
+        self.builds_channel = builds_channel
 
     def process_token(self, token):
         msg = {'event': 'tokens_arrived', 'data': token}
-        self.redis_obj.publish(self.redis_channel, json.dumps(msg))
+        self.redis_obj.publish(self.tokens_channel, json.dumps(msg))
 
     def process_sentence(self, sentence):
         self.queue.put(sentence)
 
     def process_api_call_segment(self, text):
         msg = {'event': 'generation_paused', 'data': text}
-        self.redis_obj.publish(self.redis_channel, json.dumps(msg))
+        self.redis_obj.publish(self.tokens_channel, json.dumps(msg))
+
+    def process_build_start(self, build_id, files):
+        msg = {
+            'build_event': 'webpack_build_started',
+            'id': build_id,
+            'files': files
+        }
+        self.redis_obj.publish(self.builds_channel, json.dumps(msg))
+
+    def process_build_finished(self, build_id, res: dict):
+        msg = dict(res)
+        msg.update(dict(build_event='webpack_build_finished'))
+        self.redis_obj.publish(self.builds_channel, json.dumps(msg))
 
 
 def get_last_message(generation_spec):
@@ -370,6 +527,7 @@ def create_response_message(parent, response_text, audio_samples):
 def generate_response_message(generation_spec_dict, socket_session_id, redis_object):
     generation_spec = llm_utils.GenerationSpec(**generation_spec_dict)
     token_channel = f'{TOKEN_STREAM}:{socket_session_id}'
+    builds_channel = f'build_events:{socket_session_id}'
 
     message = get_last_message(generation_spec)
 
@@ -388,7 +546,7 @@ def generate_response_message(generation_spec_dict, socket_session_id, redis_obj
     consumer = Consumer(queue, redis_object, socket_session_id, generation_spec.voice_id)
     consumer.start()
 
-    producer = Producer(queue, redis_object, token_channel, chat_renderer_cls)
+    producer = Producer(queue, redis_object, token_channel, builds_channel, chat_renderer_cls)
     try:
         response_text = producer(generation_spec)
     except Exception as e:

@@ -23,6 +23,7 @@ import {
 import { CollapsibleLLMSettings } from './presets';
 import { CollapsibleEditableSystemMessage } from './components';
 import { GenericFetchJson, csrftoken } from './generic_components';
+import { WebpackBuilds, WebpackBuildsContainer } from './builds';
 
 
 const LLAMA3_MODEL = "llama_3";
@@ -239,6 +240,12 @@ function ReplyInProgress(props) {
             </Card.Header>
             <Card.Body>
                 <Card.Text>{props.text}</Card.Text>
+                {props.builds.length > 0 && (
+                    <div>
+                        <div>Builds</div>
+                        <WebpackBuilds builds={props.builds} />
+                    </div>
+                )}
             </Card.Body>
         </Card>
     );
@@ -301,7 +308,10 @@ class ActiveChat extends React.Component {
             attachments: [],
 
             //ugly patch to force resetting the prompt form
-            submitSuccessCounter: 0
+            submitSuccessCounter: 0,
+
+            active_builds: [],
+            finished_builds: []
         };
 
         this.handleInput = this.handleInput.bind(this);
@@ -556,6 +566,11 @@ class ActiveChat extends React.Component {
     }
 
     generateData() {
+        this.setState({
+            active_builds: [],
+            finished_builds: []
+        });
+
         this.saveSystemMessage();
 
         let leaf = traverseTree(this.state.chatTree, this.state.treePath);
@@ -628,6 +643,31 @@ class ActiveChat extends React.Component {
                     inProgress: false,
                     contextLoaded: true,
                     generationError: reason
+                });
+            } else if (payload.event === "webpack_build_started") {
+                this.setState(prevState => ({
+                    active_builds: [...prevState.active_builds, {
+                        id: payload.data.id,
+                        status: 'pending',
+                        files: payload.data.files || []
+                    }]
+                }));
+            } else if (payload.event === "webpack_build_finished") {
+                this.setState(prevState => {
+                    let payloadData = payload.data;
+                    let active_builds = prevState.active_builds.filter(build => build.id !== payloadData.id);
+                    let finished_builds = [...prevState.finished_builds, {
+                        url: payloadData.url,
+                        status: payloadData.status,
+                        stdout: payloadData.stdout,
+                        stderr: payloadData.stderr,
+                        return_code: payloadData.return_code,
+                        files: payloadData.files || []
+                    }];
+                    return {
+                        active_builds,
+                        finished_builds
+                    };
                 });
             }
         };
@@ -809,7 +849,13 @@ class ActiveChat extends React.Component {
                 <ConversationTree tree={this.state.chatTree} treePath={this.state.treePath}
                         onBranchSwitch={this.handleBranchSwitch}
                         onRegenerate={this.handleRegenerate} />
-                {this.state.inProgress && <ReplyInProgress text={this.state.completion} />}
+                {this.state.inProgress && <ReplyInProgress text={this.state.completion} builds={this.state.active_builds} />}
+
+                {this.state.finished_builds.length > 0 && (
+                    <div>
+                        <WebpackBuildsContainer builds={this.state.finished_builds} />
+                    </div>
+                )}
                 <PromptForm submissionErrors={this.state.submissionErrors}
                     onSubmit={this.handleSubmitPrompt}
                     onTextChange={this.handleInput}
