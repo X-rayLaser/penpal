@@ -14,3 +14,5 @@ gunicorn
 whitenoise
 behave
 selenium
+PyYAML
+Jinja2

@@ -1,5 +1,6 @@
 import threading
 import time
+import uuid
 from queue import Queue
 import json
 import os
@@ -22,6 +23,10 @@ from tools.api_calls import (
 )
 from .utils import join_wavs
 from tools import get_specification
+from pygentify import Agent, OutputDevice, TextCache, WebInterpreter, TooManyRoundsError
+from pygentify.llm_backends import LlamaCpp, GenerationSpec as PygentifySpec
+from pygentify.messages import JinjaChatFactory
+from pygentify.tool_calling import SimpleTagBasedToolUse
 
 TOKEN_STREAM = 'token_stream'
 SPEECH_CHANNEL = 'speech_stream'
@@ -229,24 +234,34 @@ class ChatRendererToList(ChatRenderer):
         return new_prompt
 
 
-def get_prompt(message, chat_encoder_cls):
+def get_saved_history(last_message):
+    message = last_message
     chat_history = [message]
     while message.parent:
         message = message.parent
         chat_history.append(message)
 
-    config = message.chat.configuration
-    template_spec = (config and config.template_spec) or chatTemplate
+    return list(reversed(chat_history))
 
-    chat_encoder = chat_encoder_cls(template_spec)
 
-    messages = reversed(chat_history)
+def get_system_message(first_message):
+    config = first_message.chat.configuration
 
-    system_message = message.chat.system_message or ''
+    system_message = first_message.chat.system_message or ''
 
     if (config.tools):
         system_message += get_specification(config)
+    return system_message
 
+
+def get_prompt(message, chat_encoder_cls):
+    messages = get_saved_history(message)
+    first_message = messages[0]
+    config = first_message.chat.configuration
+    system_message = get_system_message(first_message)
+
+    template_spec = (config and config.template_spec) or chatTemplate
+    chat_encoder = chat_encoder_cls(template_spec)
     return chat_encoder(system_message, messages)
 
 
@@ -300,10 +315,9 @@ class ToolAugmentedTextGenerator:
 
                     response_text += finalized_segment
                     generated_text = ''
+                else:
+                    response_text += generated_text
                     break
-
-                response_text += generated_text
-                break
 
         return response_text
 
@@ -361,89 +375,139 @@ def find_code(response):
         return None
 
 
-class WebInterpreter:
-    def __init__(self, on_split, on_result):
-        self.on_split = on_split
-        self.on_result = on_result
+class RedisDevice(OutputDevice):
+    def __init__(self, redis_obj, channel):
+        self.redis_obj = redis_obj
+        self.channel = channel
+        self.cache = TextCache()
+        self.generated_text = ''
 
-        self.files = []
+    def on_token(self, token):
+        self.cache.fill(token)
 
-        import uuid
-        self.build_id = uuid.uuid4().hex
+        # todo: save only tokens of text modality
+        self.send(token)
 
-    def __call__(self, prefix, code, language=None):
-        try:
-            js_code, css_code = self.split_code(code)
-            files = [{
+    def __call__(self, new_text):
+        new_text = self.cache(new_text)
+        if new_text:
+            new_text += '\n'
+        self.send(new_text)
+
+    def send(self, text):
+        self.generated_text += text
+        msg = {'event': 'tokens_arrived', 'data': text}
+        self.redis_obj.publish(self.channel, json.dumps(msg))
+
+
+class PygentifyTextGenerator(ToolAugmentedTextGenerator):
+    def __init__(self, chat_renderer_cls, redis_obj, tokens_channel):
+        super().__init__(chat_renderer_cls)
+        self.redis_obj = redis_obj
+        self.tokens_channel = tokens_channel
+
+    def __call__(self, generation_spec):
+        # todo: this won't work for other backends
+        #old_gen = llm_utils.token_generator
+        #base_url = f'http://{old_gen.host}:{old_gen.port}'
+
+        # todo: create PygentifySpec instance from generation_spec; better yet, migrate django code to use pygentify generation spec format
+        # we only need sampling config and stop word
+        
+        #llm = LlamaCpp(base_url, generation_spec, proxies=old_gen.proxies)
+        dummy_gen = llm_utils.dummy_generators.DummyCodeGenerator()
+        llm = llm_utils.dummy_generators.DummyAdapter(dummy_gen)
+        # todo: we need system message, but at this point it is already part of prompt
+
+        output_device = RedisDevice(self.redis_obj, self.tokens_channel)
+        temp_output_device = OutputDevice()
+        default_interpreter_class = WebInterpreter
+
+        # todo: pygentify does not keep track of sentences like ToolAugmentedTextGenerator does, speech synth won't work bc of this
+        agent = Agent(llm, tools=[], system_message="", output_device=output_device,
+                      temp_output_device=temp_output_device,
+                      default_interpreter_class=default_interpreter_class, max_rounds=1)
+
+        # todo: need to write more general arg handling
+        build_id = 0
+        files = []
+        def on_started(js_code, css_code):
+            nonlocal build_id
+            files.clear()
+            # todo: move files preparation and uuid preparation inside webinterpreter class
+            files.extend([{
                 'name': 'js_code',
                 'content': js_code
             }, {
                 'name': 'css_code',
                 'content': css_code
-            }]
-            self.files = files
-            self.on_split(self.build_id, files)
-        except ValueError:
-            output = 'Error: Missing mandatory javascript code block'
-            text = f'WEBPACK CONSOLE START\n{output}\nWEBPACK CONSOLE END'
-            return text
-        else:
-            return self.send_code(js_code, css_code)
+            }])
 
-    def split_code(self, code):
-        _, js_start = self.get_lang_section_start(code, 'javascript')
+            build_id = uuid.uuid4().hex
+            self.process_build_start(build_id, files)
 
+
+        def on_finished(result_dict):
+            unknown_error = result_dict.get('webpack_internal_error')
+            if unknown_error:
+                status = 'error'
+                stdout = ''
+                stderr = unknown_error
+                return_code = 999
+            else:
+                webpack_logs = result_dict["logs"]["webpack"]
+                stdout = webpack_logs["stdout"]
+                stderr = webpack_logs["stderr"]
+                return_code = webpack_logs["return_code"]
+                success = webpack_logs["build_success"]
+
+                status = 'success' if success else 'error'
+            res = dict(status=status, return_code=return_code, stdout=stdout, stderr=stderr, files=files, url='http://localhost/')
+            self.process_build_finished(build_id, res)
+
+
+        agent.add_listener("webpack_build_started", on_started)
+        agent.add_listener("webpack_build_finished", on_finished)
+        agent.history = generation_spec.history[:-1]
+        last_msg = generation_spec.history[-1].content.render()
         try:
-            js_end, css_start = self.get_lang_section_start(code, 'css')
-            css_code = code[css_start:]
-        except ValueError:
-            css_code = ''
-            js_end = len(code)
+            agent(last_msg, include_system_message=False, record_prompt=False, self_prompting=False)
+        except TooManyRoundsError:
+            print("TooManyRoundsError, stopped generating")
+            pass
 
-        js_code = code[js_start:js_end]
-        return js_code, css_code
-
-    def send_code(self, js_code, css_code):
-        try:
-            result = react_app_maker(js_code, css_code)
-            webpack_logs = result["logs"]["webpack"]
-            stdout = webpack_logs["stdout"]
-            stderr = webpack_logs["stderr"]
-            return_code = webpack_logs["return_code"]
-            success = webpack_logs["build_success"]
-
-            status = 'success' if success else 'error'
-            res = dict(status=status, return_code=return_code, stdout=stdout, stderr=stderr, files=self.files, url='http://localhost/')
- 
-            output = f'Successful build: {success}\nReturn code: {return_code}\nStandard Output Stream:\n{stdout}\nStandard Error Stream:\n{stderr}\n'
-
-            text = f'WEBPACK CONSOLE START\n{output}\nWEBPACK CONSOLE END'
-            return text
-        except Exception as e:
-            res = dict(status='error', return_code=999, stderr=str(e), files=self.files)
-            return f'problem: {str(e)}'
-        finally:
-            self.on_result(self.build_id, res)
-
-    def get_lang_section_start(self, code, lang_marker):
-        idx = code.index(lang_marker)
-        return idx, idx + len(lang_marker)
+        return output_device.generated_text
 
 
-def react_app_maker(component_code: str, css_code: str):
-    import requests
+class PygentifyProducer(PygentifyTextGenerator):
+    def __init__(self, queue, redis_obj, tokens_channel, builds_channel, chat_renderer_cls):
+        super().__init__(chat_renderer_cls, redis_obj, tokens_channel)
+        self.queue = queue
+        self.builds_channel = builds_channel
 
-    data = {
-        "js_code": component_code,
-        "css_code": css_code
-    }
-    endpoint = "http://172.17.0.1:9900/make_react_app/"
-    headers = headers={'content-type': 'application/json'}
-    resp = requests.post(endpoint, data=json.dumps(data), headers=headers)
+    def process_token(self, token):
+        msg = {'event': 'tokens_arrived', 'data': token}
+        self.redis_obj.publish(self.tokens_channel, json.dumps(msg))
 
-    if resp.ok:
-        return resp.json()
-    raise Exception(f'Failed to create app: "{resp.reason}"')
+    def process_sentence(self, sentence):
+        self.queue.put(sentence)
+
+    def process_api_call_segment(self, text):
+        msg = {'event': 'generation_paused', 'data': text}
+        self.redis_obj.publish(self.tokens_channel, json.dumps(msg))
+
+    def process_build_start(self, build_id, files):
+        msg = {
+            'build_event': 'webpack_build_started',
+            'id': build_id,
+            'files': files
+        }
+        self.redis_obj.publish(self.builds_channel, json.dumps(msg))
+
+    def process_build_finished(self, build_id, res: dict):
+        msg = dict(res)
+        msg.update(dict(build_event='webpack_build_finished', id=build_id))
+        self.redis_obj.publish(self.builds_channel, json.dumps(msg))
 
 
 class Producer(ToolAugmentedTextGenerator):
@@ -475,7 +539,7 @@ class Producer(ToolAugmentedTextGenerator):
 
     def process_build_finished(self, build_id, res: dict):
         msg = dict(res)
-        msg.update(dict(build_event='webpack_build_finished'))
+        msg.update(dict(build_event='webpack_build_finished', id=build_id))
         self.redis_obj.publish(self.builds_channel, json.dumps(msg))
 
 
@@ -524,6 +588,30 @@ def create_response_message(parent, response_text, audio_samples):
     return response_message
 
 
+def encode_chat_thread(last_message):
+    tool_use = SimpleTagBasedToolUse.create_default()
+    msg_factory = JinjaChatFactory('llama3', tool_use)
+    
+    db_history = get_saved_history(last_message)
+    system_message = get_system_message(db_history[0])
+
+    history = []
+    if system_message:
+        msg = msg_factory.create_system_msg(system_message)
+        history.append(msg)
+    
+    for i, db_msg in enumerate(db_history):
+        if i % 2 == 0:
+            text = db_msg.text
+            if db_msg.attachments_text:
+                text += db_msg.attachments_text
+            msg = msg_factory.create_user_msg(text)
+        else:
+            msg = msg_factory.create_ai_msg(db_msg.text)
+        history.append(msg)
+    return history
+
+
 def generate_response_message(generation_spec_dict, socket_session_id, redis_object):
     generation_spec = llm_utils.GenerationSpec(**generation_spec_dict)
     token_channel = f'{TOKEN_STREAM}:{socket_session_id}'
@@ -546,7 +634,11 @@ def generate_response_message(generation_spec_dict, socket_session_id, redis_obj
     consumer = Consumer(queue, redis_object, socket_session_id, generation_spec.voice_id)
     consumer.start()
 
-    producer = Producer(queue, redis_object, token_channel, builds_channel, chat_renderer_cls)
+    #producer = Producer(queue, redis_object, token_channel, builds_channel, chat_renderer_cls)
+
+    # todo: monkey patching will do for now
+    generation_spec.history = encode_chat_thread(message)
+    producer = PygentifyProducer(queue, redis_object, token_channel, builds_channel, chat_renderer_cls)
     try:
         response_text = producer(generation_spec)
     except Exception as e:
@@ -576,5 +668,6 @@ def generate_llm_response(generation_spec_dict, socket_session_id):
     try:
         generate_response_message(generation_spec_dict, socket_session_id, redis_object)
     except Exception as e:
+        traceback.print_exc()
         msg = {'event': 'generation_error', 'data': str(e)}
         redis_object.publish(token_channel, json.dumps(msg))

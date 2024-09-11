@@ -1,6 +1,7 @@
 import time
 import random
 from .base import TokenGenerator
+from pygentify.llm_backends import BaseLLM
 
 
 class DummyGenerator(TokenGenerator):
@@ -80,3 +81,11 @@ class DummyExceptionRaisingGenerator(TokenGenerator):
     def stream_tokens(self, generation_spec):
         yield 5 / 0
         yield "hey"
+
+
+class DummyAdapter(BaseLLM):
+    def __init__(self, dummy_generator):
+        self.generator = dummy_generator
+
+    def __call__(self, text):
+        yield from self.generator.stream_tokens(None)
