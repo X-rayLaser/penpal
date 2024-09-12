@@ -208,7 +208,7 @@ class ChatRendererToList(ChatRenderer):
         }]
 
         if (msg.image_b64):
-            content.push({
+            content.append({
                 "type": "image_url",
                 "image_url": {
                     "url": msg.image_b64
@@ -265,116 +265,6 @@ def get_prompt(message, chat_encoder_cls):
     return chat_encoder(system_message, messages)
 
 
-class ToolAugmentedTextGenerator:
-    def __init__(self, chat_renderer_cls):
-        self.chat_renderer_cls = chat_renderer_cls
-
-    def __call__(self, generation_spec):
-        sentence = ''
-        generated_text = ''
-        response_text = ''
-
-        while True:
-            for token in llm_utils.stream_tokens(generation_spec):
-                sentence += token
-                generated_text += token
-                self.process_token(token)
-
-                if "." in token or "!" in token or "?" in token:
-                    self.process_sentence(sentence)
-                    sentence = ''
-
-            finalized_segment = self._make_api_call(generated_text)
-
-            if finalized_segment:
-                generation_spec.prompt = self.chat_renderer_cls.concatenate(
-                    generation_spec.prompt, finalized_segment
-                )
-                response_text += finalized_segment
-                generated_text = ''
-            else:
-
-                code_invocation = find_code(generated_text)
-                if code_invocation is not None:
-                    prefix, code, language = code_invocation
-
-                    def on_split(build_id, files):
-                        self.process_build_start(build_id, files)
-                    
-                    def on_result(build_id, res):
-                        self.process_build_finished(build_id, res)
-
-                    interpreter = WebInterpreter(on_split, on_result)
-                    output = interpreter(prefix, code)
-
-                    finalized_segment = f'{prefix}```\n{code}```\n{output}'
-
-                    generation_spec.prompt = self.chat_renderer_cls.concatenate(
-                        generation_spec.prompt, finalized_segment
-                    )
-
-                    response_text += finalized_segment
-                    generated_text = ''
-                else:
-                    response_text += generated_text
-                    break
-
-        return response_text
-
-    def _make_api_call(self, generated_text):
-        try:
-            api_call, offset = find_api_call(generated_text)
-            api_call_string = make_api_call(api_call)
-            finalized_segment = generated_text[:offset] + api_call_string
-            self.process_api_call_segment(finalized_segment)
-            return finalized_segment
-        except ApiCallNotFoundError:
-            return None
-
-    def process_token(self, token):
-        pass
-
-    def process_sentence(self, sentence):
-        pass
-
-    def process_api_call_segment(self, text):
-        pass
-
-    def process_build_start(self, build_id, files):
-        pass
-
-    def process_build_finished(self, build_id, res: dict):
-        pass
-
-
-def find_code(response):
-    start_str = end_str = "```"
-    language = None
-
-    PYTHON_LANG = 'python'
-    JS_LANG = 'javascript'
-
-    try:
-        idx_start = response.index(start_str)
-        prefix = response[:idx_start]
-        try:
-            idx_end = response.index(end_str, idx_start+1)
-        except ValueError:
-            idx_end = len(response)
-
-        code = response[idx_start + len(start_str):idx_end]
-
-        if code.lower().startswith(PYTHON_LANG):
-            language = PYTHON_LANG
-        
-        if code.lower().startswith(JS_LANG):
-            language = JS_LANG
-
-        return prefix, code, language
-    except ValueError:
-        return None
-
-
 class ProcessorDevice(OutputDevice):
     def __init__(self, redis_obj, channel, sentence_processor):
         self.redis_obj = redis_obj
@@ -409,9 +299,8 @@ class ProcessorDevice(OutputDevice):
         self.redis_obj.publish(self.channel, json.dumps(msg))
 
 
-class PygentifyTextGenerator(ToolAugmentedTextGenerator):
-    def __init__(self, chat_renderer_cls, redis_obj, tokens_channel):
-        super().__init__(chat_renderer_cls)
+class PygentifyTextGenerator:
+    def __init__(self, redis_obj, tokens_channel):
         self.redis_obj = redis_obj
         self.tokens_channel = tokens_channel
 
@@ -487,44 +376,26 @@ class PygentifyTextGenerator(ToolAugmentedTextGenerator):
 
         return output_device.generated_text
 
-
-class PygentifyProducer(PygentifyTextGenerator):
-    def __init__(self, queue, redis_obj, tokens_channel, builds_channel, chat_renderer_cls):
-        super().__init__(chat_renderer_cls, redis_obj, tokens_channel)
-        self.queue = queue
-        self.builds_channel = builds_channel
-
     def process_token(self, token):
-        msg = {'event': 'tokens_arrived', 'data': token}
-        self.redis_obj.publish(self.tokens_channel, json.dumps(msg))
+        pass
 
     def process_sentence(self, sentence):
-        self.queue.put(sentence)
+        pass
 
     def process_api_call_segment(self, text):
-        msg = {'event': 'generation_paused', 'data': text}
-        self.redis_obj.publish(self.tokens_channel, json.dumps(msg))
+        pass
 
     def process_build_start(self, build_id, files):
-        msg = {
-            'build_event': 'webpack_build_started',
-            'id': build_id,
-            'files': files
-        }
-        self.redis_obj.publish(self.builds_channel, json.dumps(msg))
+        pass
 
     def process_build_finished(self, build_id, res: dict):
-        msg = dict(res)
-        msg.update(dict(build_event='webpack_build_finished', id=build_id))
-        self.redis_obj.publish(self.builds_channel, json.dumps(msg))
+        pass
 
 
-class Producer(ToolAugmentedTextGenerator):
-    def __init__(self, queue, redis_obj, tokens_channel, builds_channel, chat_renderer_cls):
-        super().__init__(chat_renderer_cls)
+class PygentifyProducer(PygentifyTextGenerator):
+    def __init__(self, queue, redis_obj, tokens_channel, builds_channel):
+        super().__init__(redis_obj, tokens_channel)
         self.queue = queue
-        self.redis_obj = redis_obj
-        self.tokens_channel = tokens_channel
         self.builds_channel = builds_channel
 
     def process_token(self, token):
@@ -643,11 +514,9 @@ def generate_response_message(generation_spec_dict, socket_session_id, redis_obj
     consumer = Consumer(queue, redis_object, socket_session_id, generation_spec.voice_id)
     consumer.start()
 
-    #producer = Producer(queue, redis_object, token_channel, builds_channel, chat_renderer_cls)
-
     # todo: monkey patching will do for now
     generation_spec.history = encode_chat_thread(message)
-    producer = PygentifyProducer(queue, redis_object, token_channel, builds_channel, chat_renderer_cls)
+    producer = PygentifyProducer(queue, redis_object, token_channel, builds_channel)
     try:
         response_text = producer(generation_spec)
     except Exception as e:
