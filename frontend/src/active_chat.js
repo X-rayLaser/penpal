@@ -23,7 +23,7 @@ import {
 import { CollapsibleLLMSettings } from './presets';
 import { CollapsibleEditableSystemMessage } from './components';
 import { GenericFetchJson, csrftoken } from './generic_components';
-import { WebpackBuilds, WebpackBuildsContainer } from './builds';
+import { WebpackBuilds, WebpackBuildsContainer, ToolCallSection } from './builds';
 
 
 const LLAMA3_MODEL = "llama_3";
@@ -223,6 +223,7 @@ function AIMessage(props) {
 }
 
 function ReplyInProgress(props) {
+    let toolCalls = [...props.finished_tool_calls, ...props.pending_tool_calls];
     return (
         <Card bg="secondary" text="light" className="mb-3">
             <Card.Header>
@@ -244,6 +245,13 @@ function ReplyInProgress(props) {
                     <div>
                         <div>Builds</div>
                         <WebpackBuilds builds={props.builds} />
+                    </div>
+                )}
+
+                {toolCalls.length > 0 && (
+                    <div>
+                        <div>Running tools</div>
+                        <ToolCallSection toolCalls={toolCalls} />
                     </div>
                 )}
             </Card.Body>
@@ -311,7 +319,9 @@ class ActiveChat extends React.Component {
             submitSuccessCounter: 0,
 
             active_builds: [],
-            finished_builds: []
+            finished_builds: [],
+            pending_tool_calls: [],
+            finished_tool_calls: []
         };
 
         this.handleInput = this.handleInput.bind(this);
@@ -568,7 +578,9 @@ class ActiveChat extends React.Component {
     generateData() {
         this.setState({
             active_builds: [],
-            finished_builds: []
+            finished_builds: [],
+            pending_tool_calls: [],
+            finished_tool_calls: []
         });
 
         this.saveSystemMessage();
@@ -615,6 +627,7 @@ class ActiveChat extends React.Component {
 
         const socketListener = msgEvent => {
             let payload = JSON.parse(msgEvent.data);
+            let payloadData = payload.data;
             if (payload.event === "generation_complete") {
                 this.props.websocket.removeEventListener("message", socketListener);
                 let message = payload.data;
@@ -654,7 +667,6 @@ class ActiveChat extends React.Component {
                 }));
             } else if (payload.event === "webpack_build_finished") {
                 this.setState(prevState => {
-                    let payloadData = payload.data;
                     let active_builds = prevState.active_builds.filter(build => build.id !== payloadData.id);
                     let finished_builds = [...prevState.finished_builds, {
                         url: payloadData.url,
@@ -667,6 +679,40 @@ class ActiveChat extends React.Component {
                     return {
                         active_builds,
                         finished_builds
+                    };
+                });
+            } else if (payload.event === "tool_call_started") {
+                this.setState(prevState => ({
+                    pending_tool_calls: [...prevState.pending_tool_calls, {
+                        name: payloadData.name,
+                        arguments: payloadData.arguments
+                    }]
+                }));
+            } else if (payload.event === "tool_call_finished") {
+                this.setState(prevState => {
+                    let pending_tool_calls = prevState.pending_tool_calls.filter(
+                        toolCall => toolCall.name !== payloadData.name
+                    );
+
+                    let finished = prevState.pending_tool_calls.filter(
+                        toolCall => toolCall.name === payloadData.name
+                    );
+                    
+                    if (finished.length !== 1) {
+                        console.error(`Found ${finished.length} pending tool calls whose name is matching finisehe call name`);
+                        return;
+                    }
+
+                    let finishedOne = finished[0];
+
+                    return {
+                        pending_tool_calls,
+                        finished_tool_calls: [...prevState.finished_tool_calls, {
+                            name: payloadData.name,
+                            arguments: finishedOne.arguments,
+                            result: payloadData.result || "",
+                            error: payloadData.error || ""
+                        }]
                     };
                 });
             }
@@ -849,12 +895,26 @@ class ActiveChat extends React.Component {
                 <ConversationTree tree={this.state.chatTree} treePath={this.state.treePath}
                         onBranchSwitch={this.handleBranchSwitch}
                         onRegenerate={this.handleRegenerate} />
-                {this.state.inProgress && <ReplyInProgress text={this.state.completion} builds={this.state.active_builds} />}
+                {this.state.inProgress && (
+                    <ReplyInProgress text={this.state.completion}
+                                     builds={this.state.active_builds}
+                                     pending_tool_calls={this.state.pending_tool_calls}
+                                     finished_tool_calls={this.state.finished_tool_calls} />
+                )}
 
                 {this.state.finished_builds.length > 0 && (
-                    <div>
+                    <div className="mb-3">
                         <WebpackBuildsContainer builds={this.state.finished_builds} />
                     </div>
+                )}
+
+                {this.state.finished_tool_calls.length > 0 && (
+                    <Card className="mb-3">
+                        <Card.Header>Finished Tool Calls</Card.Header>
+                        <Card.Body>
+                            <ToolCallSection toolCalls={this.state.finished_tool_calls} />
+                        </Card.Body>
+                    </Card>
                 )}
                 <PromptForm submissionErrors={this.state.submissionErrors}
                     onSubmit={this.handleSubmitPrompt}

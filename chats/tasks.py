@@ -26,7 +26,7 @@ from tools import get_specification
 from pygentify import Agent, OutputDevice, TextCache, WebInterpreter, TooManyRoundsError
 from pygentify.llm_backends import LlamaCpp, GenerationSpec as PygentifySpec
 from pygentify.messages import JinjaChatFactory
-from pygentify.tool_calling import SimpleTagBasedToolUse
+from pygentify.tool_calling import SimpleTagBasedToolUse, tool_registry
 
 TOKEN_STREAM = 'token_stream'
 SPEECH_CHANNEL = 'speech_stream'
@@ -313,7 +313,7 @@ class PygentifyTextGenerator:
         # we only need sampling config and stop word
         
         #llm = LlamaCpp(base_url, generation_spec, proxies=old_gen.proxies)
-        dummy_gen = llm_utils.dummy_generators.DummyCodeGenerator()
+        dummy_gen = llm_utils.dummy_generators.DummyToolUseGenerator()
         llm = llm_utils.dummy_generators.DummyAdapter(dummy_gen)
         # todo: we need system message, but at this point it is already part of prompt
 
@@ -321,8 +321,8 @@ class PygentifyTextGenerator:
         temp_output_device = OutputDevice()
         default_interpreter_class = WebInterpreter
 
-        # todo: pygentify does not keep track of sentences like ToolAugmentedTextGenerator does, speech synth won't work bc of this
-        agent = Agent(llm, tools=[], system_message="", output_device=output_device,
+        tools = tool_registry
+        agent = Agent(llm, tools=tools, system_message="", output_device=output_device,
                       temp_output_device=temp_output_device,
                       default_interpreter_class=default_interpreter_class, max_rounds=1)
 
@@ -366,6 +366,9 @@ class PygentifyTextGenerator:
 
         agent.add_listener("webpack_build_started", on_started)
         agent.add_listener("webpack_build_finished", on_finished)
+        agent.add_listener("tool_call_started", self.process_tool_call)
+        agent.add_listener("tool_call_finished", self.process_tool_result)
+        
         agent.history = generation_spec.history[:-1]
         last_msg = generation_spec.history[-1].content.render()
         try:
@@ -380,6 +383,12 @@ class PygentifyTextGenerator:
         pass
 
     def process_sentence(self, sentence):
+        pass
+
+    def process_tool_call(self, name, arg_dict):
+        pass
+
+    def process_tool_result(self, name, result, error):
         pass
 
     def process_api_call_segment(self, text):
@@ -404,6 +413,23 @@ class PygentifyProducer(PygentifyTextGenerator):
 
     def process_sentence(self, sentence):
         self.queue.put(sentence)
+
+    def process_tool_call(self, name, arg_dict):
+        self._notify_about_tool_use('tool_call_started', {
+            'name': name,
+            'arguments': arg_dict
+        })
+
+    def process_tool_result(self, name, result=None, error=None):
+        self._notify_about_tool_use('tool_call_finished', {
+            'name': name,
+            'result': result,
+            'error': error
+        })
+
+    def _notify_about_tool_use(self, event_type, data):
+        msg = {'event': event_type, 'data': data}
+        self.redis_obj.publish(self.tokens_channel, json.dumps(msg))
 
     def process_api_call_segment(self, text):
         msg = {'event': 'generation_paused', 'data': text}

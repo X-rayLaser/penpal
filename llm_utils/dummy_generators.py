@@ -1,4 +1,5 @@
 import time
+import json
 import random
 from .base import TokenGenerator
 from pygentify.llm_backends import BaseLLM
@@ -43,8 +44,9 @@ class DummyMarkdownGenerator(TokenGenerator):
 
 class DummyToolUseGenerator(TokenGenerator):
     def stream_tokens(self, generation_spec):
-        tokens1 = ["one ", "two ", "three ", "<", "api>", "calculator", 
-                  "(+,", "2,3)", "</api>", " rest", " to be ", "discarded "]
+        data = {'tool_name': 'add', 'args': dict(num1=2, num2=3)}
+        tokens1 = ["one ", "two ", "three ", "<", "|tool_use_start|>", json.dumps(data),
+                   "<|tool_use_end|>", " rest", " to be ", "discarded "]
         tokens2 = ["four", "five", "six"]
         
         seq = tokens1 if random.random() > 0.5 else tokens2

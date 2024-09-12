@@ -67,49 +67,11 @@ export function WebpackBuilds({ builds }) {
 }
 
 
-function CardBuild({ buildObj, id }) {
-    const [open, setOpen] = useState(false);
-
-    let collapsibleId = `collapsed-build-details-${id}`;
-
-    let textColor;
-    if (buildObj.status === 'success' ) {
-        textColor = 'success';
-    } else if (buildObj.status === 'error' ) {
-        textColor = 'danger';
-    } else {
-        textColor = 'info';
-    }
-    return (
-        <div>
-            <Card text={textColor}>
-                <Card.Body>
-                    <Card.Title variant="primary" onClick={() => setOpen(!open)}
-                            aria-controls={collapsibleId}
-                            aria-expanded={open} style={{ cursor: 'pointer'}}
-                    >
-                        <BuildHeader builderName="Webpack" status={buildObj.status} />
-                    </Card.Title>
-                     
-                    <Card.Text>
-                    <Collapse in={open}>
-                        <div id={collapsibleId}>
-                            <BuildBody {...buildObj} />
-                        </div>
-                    </Collapse>
-                    </Card.Text>
-                </Card.Body>
-            </Card>
-        </div>
-    );
-}
-
-
 function AccordionBuild({ buildObj, id }) {
     return (
         <Accordion.Item eventKey={`${id}`}>
             <Accordion.Header>
-                <BuildHeader builderName="Webpack" status={buildObj.status} />
+                <AccordionHeader name="Webpack" status={buildObj.status} />
             </Accordion.Header>
             <Accordion.Body>
                 <BuildBody {...buildObj} />
@@ -119,7 +81,67 @@ function AccordionBuild({ buildObj, id }) {
 }
 
 
-function BuildHeader({ builderName, status }) {
+export function ToolCallSection({ toolCalls }) {
+    return (
+        <Accordion style={{ maxWidth: '45em' }}>
+            {toolCalls.map((toolObject, idx) =>
+                <ToolCall toolObject={toolObject} id={idx} key={idx} />
+            )}
+        </Accordion>
+    );
+}
+
+function ToolCall({ toolObject, id }) {
+    let status;
+    if (toolObject.result) {
+        status = 'success';
+    } else if (toolObject.error) {
+        status = 'error';
+    } else {
+        status = 'pending';
+    }
+
+    let name = toolObject.name;
+    let argsArray = [];
+
+    for (const [key, value] of Object.entries(toolObject.arguments)) {
+        argsArray.push({
+            name: key,
+            value: value
+        });
+    }
+
+    return (
+        <Accordion.Item eventKey={`${id}`}>
+            <Accordion.Header>
+                <AccordionHeader name={name} status={status} />
+            </Accordion.Header>
+            <Accordion.Body>
+                <div className="mb-3">Arguments:</div>
+                <ul>
+                    {argsArray.map(({ name, value }, idx) => <li key={idx}>{name}: {value}</li>)}
+                </ul>
+
+                {toolObject.result && (
+                    <div>
+                        <span>Result: </span>
+                        <span>{toolObject.result}</span>
+                    </div>
+                )}
+
+                {toolObject.error && (
+                    <div>
+                        <span>Error: </span>
+                        <span>{toolObject.error}</span>
+                    </div>
+                )}
+            </Accordion.Body>
+        </Accordion.Item>
+    );
+}
+
+
+function AccordionHeader({ name, status }) {
     let statusElement;
     let textColor;
     if (status === 'success') {
@@ -140,7 +162,7 @@ function BuildHeader({ builderName, status }) {
     }
     return (
         <div className={textColor}>
-            <span className="me-2">{builderName}</span>
+            <span className="me-2">{name}</span>
             <span>{statusElement}</span>
         </div>
     );
