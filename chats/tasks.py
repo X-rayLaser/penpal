@@ -375,12 +375,14 @@ def find_code(response):
         return None
 
 
-class RedisDevice(OutputDevice):
-    def __init__(self, redis_obj, channel):
+class ProcessorDevice(OutputDevice):
+    def __init__(self, redis_obj, channel, sentence_processor):
         self.redis_obj = redis_obj
         self.channel = channel
         self.cache = TextCache()
         self.generated_text = ''
+        self.sentence = ''
+        self.sentence_processor = sentence_processor
 
     def on_token(self, token):
         self.cache.fill(token)
@@ -395,6 +397,13 @@ class RedisDevice(OutputDevice):
         self.send(new_text)
 
     def send(self, text):
+        for ch in text:
+            self.sentence += ch
+
+            if ch in ".!?":
+                self.sentence_processor.process_sentence(self.sentence)
+                self.sentence = ''
+
         self.generated_text += text
         msg = {'event': 'tokens_arrived', 'data': text}
         self.redis_obj.publish(self.channel, json.dumps(msg))
@@ -419,7 +428,7 @@ class PygentifyTextGenerator(ToolAugmentedTextGenerator):
         llm = llm_utils.dummy_generators.DummyAdapter(dummy_gen)
         # todo: we need system message, but at this point it is already part of prompt
 
-        output_device = RedisDevice(self.redis_obj, self.tokens_channel)
+        output_device = ProcessorDevice(self.redis_obj, self.tokens_channel, self)
         temp_output_device = OutputDevice()
         default_interpreter_class = WebInterpreter
 
