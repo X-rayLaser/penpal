@@ -313,7 +313,7 @@ class PygentifyTextGenerator:
         # we only need sampling config and stop word
         
         #llm = LlamaCpp(base_url, generation_spec, proxies=old_gen.proxies)
-        dummy_gen = llm_utils.dummy_generators.DummyToolUseGenerator()
+        dummy_gen = llm_utils.token_generator
         llm = llm_utils.dummy_generators.DummyAdapter(dummy_gen)
         # todo: we need system message, but at this point it is already part of prompt
 

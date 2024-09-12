@@ -1,0 +1,9 @@
+## **{{ name }}{{ signature }}**
+
+{{ doctext }}
+{% if usage_examples %}
+You call function "{{ name }}" like this:
+{% for example in usage_examples %}
+- {{ example }}
+{% endfor %}
+{% endif %}

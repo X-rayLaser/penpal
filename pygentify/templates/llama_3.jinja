@@ -1,0 +1,5 @@
+<|begin_of_text|>
+{%- for msg in messages -%}<|start_header_id|>{{ msg.role }}<|end_header_id|>
+
+{{ msg.content.text }}<|eot_id|>
+{%- endfor -%}
