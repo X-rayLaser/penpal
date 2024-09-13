@@ -379,6 +379,11 @@ class IgnoringInterpreter(Interpreter):
 
 
 class WebInterpreter(Interpreter):
+    def __init__(self, agent):
+        super().__init__(agent)
+        self.build_id = 0
+        self.build_files = []
+
     def __call__(self, prefix, code, language=None):
         msg = self.agent.chat_factory.create_ai_msg(f'{prefix}```\n{code}```')
         self.agent.history.append(msg)
@@ -391,7 +396,17 @@ class WebInterpreter(Interpreter):
             channels = ["sandbox"]
             self.agent._create_and_process_message(self.agent.chat_factory.create_ai_msg, channels, text)
         else:
-            self.agent.notify("webpack_build_started", js_code=js_code, css_code=css_code)
+            import uuid
+            self.build_id = uuid.uuid4().hex
+
+            self.build_files = [{
+                'name': 'js_code',
+                'content': js_code
+            }, {
+                'name': 'css_code',
+                'content': css_code
+            }]
+            self.agent.notify("webpack_build_started", build_id=self.build_id, files=self.build_files)
             self.send_code(js_code, css_code)
 
     def split_code(self, code):
@@ -415,8 +430,7 @@ class WebInterpreter(Interpreter):
             stderr = webpack_logs["stderr"]
             return_code = webpack_logs["return_code"]
             success = webpack_logs["build_success"]
-
-            event_data = dict(result)
+            status = 'success' if success else 'error'
 
             output = f'Successful build: {success}\nReturn code: {return_code}\nStandard Output Stream:\n{stdout}\nStandard Error Stream:\n{stderr}\n'
 
@@ -426,9 +440,18 @@ class WebInterpreter(Interpreter):
             self.agent._create_and_process_message(self.agent.chat_factory.create_ai_msg, channels, text)
         except Exception as e:
             print("problem", str(e))
-            event_data = dict(webpack_internal_error=str(e))
-        finally:
-            self.agent.notify("webpack_build_finished", result_dict=event_data)
+            status = 'error'
+            stdout = ''
+            stderr = str(e)
+            return_code = 999
+        finally:            
+            res = dict(status=status,
+                       return_code=return_code,
+                       stdout=stdout,
+                       stderr=stderr,
+                       files=self.build_files,
+                       url='http://localhost/')
+            self.agent.notify("webpack_build_finished", build_id=self.build_id, result=res)
 
     def get_lang_section_start(self, code, lang_marker):
         idx = code.index(lang_marker)

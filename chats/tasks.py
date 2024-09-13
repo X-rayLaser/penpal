@@ -329,64 +329,8 @@ class PygentifyTextGenerator:
                       temp_output_device=temp_output_device,
                       default_interpreter_class=default_interpreter_class, max_rounds=1)
 
-        # todo: need to write more general arg handling
-        build_id = 0
-        files = []
-
-        def fix_linebreaks(s):
-            return markdown.markdown(s.replace('\n', '\n\n'), extensions=['fenced_code'])
-
-        def format_code(code):
-            code = f"```{code}```"
-            return markdown.markdown(code, extensions=['fenced_code'])
-
-        def on_started(js_code, css_code):
-            nonlocal build_id
-            files.clear()
-            # todo: move files preparation and uuid preparation inside webinterpreter class
-            files.extend([{
-                'name': 'js_code',
-                'content': format_code(js_code)
-            }, {
-                'name': 'css_code',
-                'content': format_code(css_code)
-            }])
-
-            build_id = uuid.uuid4().hex
-            self.process_build_start(build_id, files)
-
-
-        def on_finished(result_dict):
-            unknown_error = result_dict.get('webpack_internal_error')
-            if unknown_error:
-                status = 'error'
-                stdout = ''
-                stderr = unknown_error
-                return_code = 999
-            else:
-                webpack_logs = result_dict["logs"]["webpack"]
-                stdout = webpack_logs["stdout"]
-                stderr = webpack_logs["stderr"]
-                return_code = webpack_logs["return_code"]
-                success = webpack_logs["build_success"]
-
-                status = 'success' if success else 'error'
-
-
-            stdout = fix_linebreaks(stdout)
-            stderr = fix_linebreaks(stderr)
-            
-            res = dict(status=status,
-                       return_code=return_code,
-                       stdout=stdout,
-                       stderr=stderr,
-                       files=files,
-                       url='http://localhost/')
-            self.process_build_finished(build_id, res)
-
-
-        agent.add_listener("webpack_build_started", on_started)
-        agent.add_listener("webpack_build_finished", on_finished)
+        agent.add_listener("webpack_build_started", self.process_build_start)
+        agent.add_listener("webpack_build_finished", self.process_build_finished)
         agent.add_listener("tool_call_started", self.process_tool_call)
         agent.add_listener("tool_call_finished", self.process_tool_result)
         
@@ -418,8 +362,27 @@ class PygentifyTextGenerator:
     def process_build_start(self, build_id, files):
         pass
 
-    def process_build_finished(self, build_id, res: dict):
+    def process_build_finished(self, build_id, result: dict):
         pass
+
+
+
+def fix_linebreaks(s):
+    return markdown.markdown(s.replace('\n', '\n\n'), extensions=['fenced_code'])
+
+
+def format_code(code):
+    code = f"```{code}```"
+    return markdown.markdown(code, extensions=['fenced_code'])
+
+
+def format_files(files):
+    fixed_files = []
+    for f in files:
+        name = f['name']
+        content = format_code(f['content'])
+        fixed_files.append(dict(name=name, content=content))
+    return fixed_files
 
 
 class PygentifyProducer(PygentifyTextGenerator):
@@ -460,12 +423,17 @@ class PygentifyProducer(PygentifyTextGenerator):
         msg = {
             'build_event': 'webpack_build_started',
             'id': build_id,
-            'files': files
+            'files': format_files(files)
         }
         self.redis_obj.publish(self.builds_channel, json.dumps(msg))
 
-    def process_build_finished(self, build_id, res: dict):
-        msg = dict(res)
+    def process_build_finished(self, build_id, result: dict):
+        result = dict(result)
+        result["stdout"] = fix_linebreaks(result["stdout"])
+        result["stderr"] = fix_linebreaks(result["stderr"])
+        result["files"] = format_files(result["files"])
+
+        msg = dict(result)
         msg.update(dict(build_event='webpack_build_finished', id=build_id))
         self.redis_obj.publish(self.builds_channel, json.dumps(msg))
 
