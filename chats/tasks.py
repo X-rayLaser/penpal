@@ -9,6 +9,8 @@ import traceback
 from celery import shared_task
 import redis
 from pypdf import PdfReader
+import markdown
+import bleach
 from django.core.files.base import ContentFile
 from django.conf import settings
 import llm_utils
@@ -330,16 +332,24 @@ class PygentifyTextGenerator:
         # todo: need to write more general arg handling
         build_id = 0
         files = []
+
+        def fix_linebreaks(s):
+            return markdown.markdown(s.replace('\n', '\n\n'), extensions=['fenced_code'])
+
+        def format_code(code):
+            code = f"```{code}```"
+            return markdown.markdown(code, extensions=['fenced_code'])
+
         def on_started(js_code, css_code):
             nonlocal build_id
             files.clear()
             # todo: move files preparation and uuid preparation inside webinterpreter class
             files.extend([{
                 'name': 'js_code',
-                'content': js_code
+                'content': format_code(js_code)
             }, {
                 'name': 'css_code',
-                'content': css_code
+                'content': format_code(css_code)
             }])
 
             build_id = uuid.uuid4().hex
@@ -361,7 +371,17 @@ class PygentifyTextGenerator:
                 success = webpack_logs["build_success"]
 
                 status = 'success' if success else 'error'
-            res = dict(status=status, return_code=return_code, stdout=stdout, stderr=stderr, files=files, url='http://localhost/')
+
+
+            stdout = fix_linebreaks(stdout)
+            stderr = fix_linebreaks(stderr)
+            
+            res = dict(status=status,
+                       return_code=return_code,
+                       stdout=stdout,
+                       stderr=stderr,
+                       files=files,
+                       url='http://localhost/')
             self.process_build_finished(build_id, res)
 
 

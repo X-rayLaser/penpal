@@ -172,6 +172,16 @@ function AccordionHeader({ name, status }) {
 function BuildBody({ status, stdout, stderr, files, url="" }) {
     let tree = files.map(({ name }) => name);
 
+    let stdoutHtml = {
+        __html: stdout || ""
+    }
+
+    let stderrHtml = {
+        __html: stderr || ""
+    }
+    let prerenderedStdout = <pre dangerouslySetInnerHTML={stdoutHtml} style={{whiteSpace: 'break-spaces'}} />;
+    let prerenderedStderr = <pre dangerouslySetInnerHTML={stderrHtml} style={{whiteSpace: 'break-spaces'}} />;
+
     return (
         <div>
             <Tabs
@@ -191,7 +201,7 @@ function BuildBody({ status, stdout, stderr, files, url="" }) {
                 {stdout && (
                     <Tab eventKey="stdout" title="STDOUT">
                         <div className="mb-3">
-                            <div>{stdout}</div>
+                            <div>{prerenderedStdout}</div>
                         </div>
                     </Tab>
                 )}
@@ -199,7 +209,7 @@ function BuildBody({ status, stdout, stderr, files, url="" }) {
                 {stderr && (
                     <Tab eventKey="stderr" title="STDERR">
                         <div className="mb-3">
-                            <div>{stderr}</div>
+                            <div>{prerenderedStderr}</div>
                         </div>
                     </Tab>
                 )}
@@ -212,7 +222,9 @@ function BuildBody({ status, stdout, stderr, files, url="" }) {
                             {files.map(({ name, content }, idx) =>
                                 <Accordion.Item key={idx} eventKey={`${idx}`}>
                                     <Accordion.Header>{name}</Accordion.Header>
-                                    <Accordion.Body>{content}</Accordion.Body>
+                                    <Accordion.Body>
+                                        <pre dangerouslySetInnerHTML={{__html: content}} style={{whiteSpace: 'break-spaces'}} />
+                                    </Accordion.Body>
                                 </Accordion.Item>
                             )}
 

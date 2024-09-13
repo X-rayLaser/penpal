@@ -75,7 +75,7 @@ css
 class DummyCodeGenerator(TokenGenerator):
     def stream_tokens(self, generation_spec):
         for ch in response_with_code:
-            time.sleep(0.1)
+            time.sleep(0.05)
             yield ch
 
 
