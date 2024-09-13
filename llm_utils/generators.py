@@ -1,5 +1,7 @@
 import requests
 import json
+from pygentify.llm_backends import GenerationSpec
+from pygentify.llm_backends import LlamaCpp
 from .base import TokenGenerator
 
 
@@ -70,65 +72,19 @@ class RemoteLLM(TokenGenerator):
                 yield entry["content"]
 
 
-class ManagedRemoteLLM(RemoteLLM):
-    """LLM server must be stateful and it must implement these routes:
-        - /clear-context
-        - /completion
-        - /download-llm
-        - /download-status
-        - /list-llms
-        - /configure-llm
-        - /start-llm
-        - /stop-llm
-    """
-    def start_download(self, repo, file_name, size, llm_store='huggingface'):
-        """Begins downloading a LLM on the server"""
-        url = self.make_full_url("/download-llm")
-        body = dict(repo=repo, file_name=file_name, size=size)
-        headers = {'Content-Type': 'application/json'}
-        resp = self.request_maker.post(url, data=json.dumps(body), headers=headers)
-        obj = resp.json()
-        if resp.status_code != 200:
-            raise DownloadStartFailed(obj)
-        return obj['download_id']
+class LlamaCppServer(TokenGenerator):
+    def __init__(self, endpoint, proxies):
+        self.endpoint = endpoint
+        self.proxies = proxies
+        self.generation_spec = None
 
-    def download_status(self, repo_id, file_name):
-        url = self.make_full_url("/download-status")
-        body = dict(repo_id=repo_id, file_name=file_name)
-        return self.post_json(url, body)
+    def set_spec(self, sampling_config, stop_word):
+        self.generation_spec = GenerationSpec(sampling_config, stop_word)
 
-    def downloads_in_progress(self):
-        url = self.make_full_url("/downloads-in-progress")
-        resp = self.request_maker.get(url)
-        return resp.json()
-
-    def failed_downloads(self):
-        url = self.make_full_url("/failed-downloads")
-        resp = self.request_maker.get(url)
-        return resp.json()
-
-    def list_installed_models(self):
-        """Returns a list of models installed on the LLM server"""
-        url = self.make_full_url("/list-models")
-        resp = self.request_maker.get(url)
-        return resp.json()
-
-    def configure_llm(self, config):
-        """Passes the LLM configuration to the server"""
-
-    def start_llm(self):
-        """Start/restart LLM specified by configure_llm method which must be called beforehand"""
-
-    def stop_llm(self):
-        """Stop running LLM on the server"""
-
-    def make_full_url(self, path):
-        return f"http://{self.host}:{self.port}{path}"
-
-    def post_json(self, url, body):
-        headers = {'Content-Type': 'application/json'}
-        resp = self.request_maker.post(url, data=json.dumps(body), headers=headers)
-        return resp.json()
+    def __call__(self, text):
+        llm = LlamaCpp(self.endpoint, self.generation_spec, self.proxies)
+        yield from llm(text)
+        return super().__call__(text)
 
 
 def clean_llm_settings(llm_settings):

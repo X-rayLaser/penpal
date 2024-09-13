@@ -136,74 +136,6 @@ class VoiceSelectionWidget extends BaseSelectionWidget {
 }
 
 
-class RepositorySelectionWidget extends BaseSelectionWidget {
-    constructor(props) {
-        super(props);
-        this.selectionLabel = "Model repository id";
-        this.selectionId = "model_repository_select"
-        this.ariaLabel = this.selectionLabel + " selection";
-    }
-
-    renderDetail(item) {
-        return (
-            <Card bg="light" text="dark" className="mt-3 mb-3">
-                <Card.Body>
-                    <Card.Title>{this.selectionLabel}</Card.Title>
-                    <Card.Text>{item}</Card.Text>
-                </Card.Body>
-            </Card>
-        );
-    }
-
-    getName(item) {
-        return item;
-    }
-}
-
-class ModelSelectionWidget extends BaseSelectionWidget {
-    constructor(props) {
-        super(props);
-        this.selectionLabel = "Model file";
-        this.selectionId = "model_file_select"
-        this.ariaLabel = this.selectionLabel + " selection";
-    }
-
-    renderDetail(item) {
-        let licensesText = "";
-        if (item.repo.licenses) {
-            licensesText = item.repo.licenses.join(", ");
-        }
-
-        let papersText = "";
-        if (item.repo.papers) {
-            papersText = item.repo.papers.join(", ");
-        }
-
-        let datasetsText = "";
-        if (item.repo.datasets) {
-            datasetsText = item.repo.datasets.join(", ");
-        }
-
-        return (
-            <Card bg="light" text="dark" className="mt-3 mb-3">
-                <Card.Body>
-                    <Card.Title>{this.selectionLabel}</Card.Title>
-                    <Card.Text>File: {item.file_name}</Card.Text>
-                    <Card.Text>Size: {renderSize(item.size)}</Card.Text>
-                    {licensesText && <Card.Text>Licenses: {licensesText}</Card.Text>}
-                    {papersText && <Card.Text>Papers: {papersText}</Card.Text>}
-                    {datasetsText && <Card.Text>Datasets: {datasetsText}</Card.Text>}
-                </Card.Body>
-            </Card>
-        );
-    }
-
-    getName(item) {
-        return item.file_name;
-    }
-}
-
-
 class PresetSelectionWidget extends BaseSelectionWidget {
     constructor(props) {
         super(props);
@@ -270,168 +202,14 @@ class PresetSelectionWidget extends BaseSelectionWidget {
 }
 
 
-class ModelLaunchConfig extends React.Component {
-    constructor(props) {
-        super(props);
-
-        this.state = this.defaultLaunchParams;
-
-        this.handleContextSizeChange = this.handleContextSizeChange.bind(this);
-        this.handleNglChange = this.handleNglChange.bind(this);
-        this.handleNumThreadsChange = this.handleNumThreadsChange.bind(this);
-        this.handleNumBatchThreadsChange = this.handleNumBatchThreadsChange.bind(this);
-        this.handleBatchSizeChange = this.handleBatchSizeChange.bind(this);
-        this.handleMaxTokensChange = this.handleMaxTokensChange.bind(this);
-    }
-
-    get defaultLaunchParams() {
-        return {...this.constructor.defaultLaunchParams};
-    }
-
-    handleContextSizeChange(e) {
-        this.updateStateField("contextSize", e);
-    }
-
-    handleNglChange(e) {
-        this.updateStateField("ngl", e);
-    }
-
-    handleNumThreadsChange(e) {
-        this.updateStateField("numThreads", e);
-    }
-
-    handleNumBatchThreadsChange(e) {
-        this.updateStateField("numBatchThreads", e);
-    }
-
-    handleBatchSizeChange(e) {
-        this.updateStateField("batchSize", e);
-    }
-
-    handleMaxTokensChange(e) {
-        this.updateStateField("nPredict", e);
-    }
-
-    updateStateField(field, event) {
-        let update = {};
-        let value = event.target.value;
-        let intValue;
-
-        if (!value) {
-            intValue = 0;
-        } else {
-            try {
-                intValue = parseInt(value);
-            } catch (e) {
-                console.error("Parsing error, value:", value);
-                intValue = 0;
-            }
-        }
-
-        if (isNaN(intValue)) {
-            intValue = 0;
-        }
-
-        update[field] = intValue;
-        this.setState(update, () => this.notify());
-    }
-
-    notify() {
-        this.props.onChange(this.state);
-    }
-
-    render() {
-        return (
-            <div>
-                <Row className="mb-3">
-                    <Form.Label htmlFor="config_context_size" column="lg" sm={6} lg={4}>Context size</Form.Label>
-                    <Col>
-                        <Form.Control size="lg" id="config_context_size" name="context-size" type="number"
-                                            placeholder="Context size of your LLM" 
-                                            value={this.state.contextSize}
-                                            onChange={this.handleContextSizeChange} />
-                    </Col>
-                </Row>
-                <Row className="mb-3">
-                    <Form.Label htmlFor="config_gpu_layers" column="lg" sm={6} lg={4}># GPU layers</Form.Label>
-                    <Col>
-                        <Form.Control size="lg" id="config_gpu_layers" name="context-size" type="number"
-                                            placeholder="Number of loaded GPU layers"
-                                            value={this.state.ngl}
-                                            onChange={this.handleNglChange} />
-                    </Col>
-                </Row>
-                <Row className="mb-3">
-                    <Form.Label htmlFor="config_num_gen_threads" column="lg" sm={6} lg={4}># threads for generation</Form.Label>
-                    <Col>
-                        <Form.Control size="lg" id="config_num_gen_threads" name="num_generation_threads" type="number"
-                                            placeholder="Number of threads to use during generation"
-                                            value={this.state.numThreads}
-                                            onChange={this.handleNumThreadsChange} />
-                    </Col>
-                </Row>
-
-                <Row className="mb-3">
-                    <Form.Label htmlFor="config_num_batch_threads" column="lg" sm={6} lg={4}># batch threads</Form.Label>
-                    <Col>
-                        <Form.Control size="lg" id="config_num_batch_threads" name="num_batch_threads" type="number"
-                                            placeholder="Number of threads used during batch processing"
-                                            value={this.state.numBatchThreads}
-                                            onChange={this.handleNumBatchThreadsChange} />
-                    </Col>
-                </Row>
-
-                <Row className="mb-3">
-                    <Form.Label htmlFor="config_batch_size" column="lg" sm={6} lg={4}>Batch size</Form.Label>
-                    <Col>
-                        <Form.Control size="lg" id="config_batch_size" name="batch_size" type="number"
-                                            placeholder="Size of batch for prompt processing"
-                                            value={this.state.batchSize}
-                                            onChange={this.handleBatchSizeChange} />
-                    </Col>
-                </Row>
-
-                <Row className="mb-3">
-                    <Form.Label htmlFor="config_n_predict" column="lg" sm={6} lg={4}># tokens to predict</Form.Label>
-                    <Col>
-                        <Form.Control size="lg" id="config_n_predict" name="n_predict" type="number"
-                                            placeholder="Maximum number of tokens to predict"
-                                            value={this.state.nPredict}
-                                            onChange={this.handleMaxTokensChange} />
-                    </Col>
-                </Row>
-            </div>
-        );
-    }
-}
-
-
-ModelLaunchConfig.defaultLaunchParams = {
-    contextSize: 512,
-    ngl: 0,
-    numThreads: 2,
-    numBatchThreads: 2,
-    batchSize: 512,
-    nPredict: 512
-};
-
 class NewConfigurationForm extends React.Component {
     constructor(props) {
         super(props);
 
         this.state = {
             name: "",
-            selectedRepo: "",
-            selectedModelFile: "",
-            selectedMMprojectorRepo: "",
-            selectedMMprojectorModelFile: "",
             selectedVoiceId: "",
-            launchConfig: ModelLaunchConfig.defaultLaunchParams,
-            repos: [],
-            modelFiles: [],
-            projectorFiles: [],
             voices: [],
-            installedModels: {}, // repository -> model_file mapping
             systemMessages: [],
             selectedMessageName: "",
             presets: [],
@@ -450,15 +228,8 @@ class NewConfigurationForm extends React.Component {
         this.handleSystemMessageChange = this.handleSystemMessageChange.bind(this);
         this.handlePresetChange = this.handlePresetChange.bind(this);
         this.handleSubmit = this.handleSubmit.bind(this);
-        this.handleModelRepoChange = this.handleModelRepoChange.bind(this);
-        this.handleModelFileChange = this.handleModelFileChange.bind(this);
-        this.handleLaunchConfChanged = this.handleLaunchConfChanged.bind(this);
         this.handleCheck = this.handleCheck.bind(this);
         this.handleTemplateInput = this.handleTemplateInput.bind(this);
-
-        this.handleProjectorRepoChange = this.handleProjectorRepoChange.bind(this);
-        this.handleProjectorModelChange = this.handleProjectorModelChange.bind(this);
-
         this.handleVoiceChange = this.handleVoiceChange.bind(this);
     }
 
@@ -501,30 +272,6 @@ class NewConfigurationForm extends React.Component {
         fetcher.performFetch('/chats/supported-tools/').then(data => {
             this.setState({ supportedTools: data });
         });
-
-        fetcher.performFetch('/modelhub/installed-models/').then(entries => {
-            let groupedEntries = this.groupByRepoId(entries);
-            let repos = Object.keys(groupedEntries);
-            let selectedRepo = "";
-            let selectedModelFile = "";
-            let modelFiles = [];
-
-            if (repos.length > 0) {
-                selectedRepo = repos[0];
-                modelFiles = groupedEntries[selectedRepo];
-                if (modelFiles.length > 0) {
-                    selectedModelFile = modelFiles[0].file_name;
-                }
-            }
-
-            this.setState({
-                repos,
-                installedModels: groupedEntries,
-                selectedRepo,
-                modelFiles,
-                selectedModelFile
-            });
-        });
     }
 
     groupByRepoId(entries) {
@@ -552,51 +299,8 @@ class NewConfigurationForm extends React.Component {
         this.setState({ selectedPresetName });
     }
 
-    handleModelRepoChange(selectedRepo) {
-        let selection = this.updateSelectionFields(selectedRepo);
-        this.setState({
-            selectedRepo,
-            modelFiles: selection.modelFiles,
-            selectedModelFile: selection.selectedModelFile
-        });
-    }
-
-    handleProjectorRepoChange(selectedRepo) {
-        let selection = this.updateSelectionFields(selectedRepo);
-        this.setState({
-            selectedMMprojectorRepo: selectedRepo,
-            projectorFiles: selection.modelFiles,
-            selectedMMprojectorModelFile: selection.selectedModelFile
-        });
-    }
-
-    handleProjectorModelChange(selectedModelFile) {
-        this.setState({ selectedMMprojectorModelFile: selectedModelFile });
-    }
-
-    updateSelectionFields(selectedRepo) {
-        let modelFiles = [];
-        let selectedModelFile = "";
-        if (this.state.installedModels.hasOwnProperty(selectedRepo)) {
-            modelFiles = this.state.installedModels[selectedRepo];
-        }
-
-        if (modelFiles.length > 0) {
-            selectedModelFile = modelFiles[0].file_name;
-        }
-
-        return {
-            modelFiles,
-            selectedModelFile
-        };
-    }
-
     handleVoiceChange(selectedVoiceId) {
         this.setState({ selectedVoiceId });
-    }
-
-    handleModelFileChange(selectedModelFile) {
-        this.setState({ selectedModelFile });
     }
 
     handleCheck(checked, name) {
@@ -617,23 +321,12 @@ class NewConfigurationForm extends React.Component {
 
     }
 
-    handleLaunchConfChanged(launchConfig) {
-        this.setState({ launchConfig });
-    }
-
     handleSubmit(e) {
         e.preventDefault();
         let preset = this.state.nameToPreset[this.state.selectedPresetName];
 
-        if (this.state.selectedMMprojectorModelFile) {
-            this.state.launchConfig['mmprojector'] = this.state.selectedMMprojectorModelFile;
-        }
-
         let data = {
             name: this.state.name,
-            model_repo: this.state.selectedRepo,
-            file_name: this.state.selectedModelFile,
-            launch_params: this.state.launchConfig,
             tools: this.state.tools,
             template_spec: this.state.chatTemplate,
             voice_id: this.state.selectedVoiceId
@@ -691,7 +384,6 @@ class NewConfigurationForm extends React.Component {
 
         console.log('selected message name', this.state.selectedMessageName);
 
-
         return (
             <Form onSubmit={this.handleSubmit}>
                 <Row className="mb-3">
@@ -706,47 +398,6 @@ class NewConfigurationForm extends React.Component {
                 {nameErrors.length > 0 && 
                     <div>{nameErrors}</div>
                 }
-                
-                <div className="mb-3">
-                    <RepositorySelectionWidget 
-                        items={this.state.repos}
-                        selectedName={this.state.selectedRepo}
-                        onChange={this.handleModelRepoChange} 
-                    />
-                </div>
-
-                <div className="mb-3">
-                    <ModelSelectionWidget 
-                        items={this.state.modelFiles}
-                        selectedName={this.state.selectedModelFile}
-                        onChange={this.handleModelFileChange} 
-                    />
-                </div>
-
-                <div className="mb-3">
-                    <RepositorySelectionWidget
-                        items={["", ...this.state.repos]}
-                        selectedName={this.state.selectedMMprojectorRepo}
-                        onChange={this.handleProjectorRepoChange}
-                    />
-                </div>
-
-                <div className="mb-3">
-                    <ModelSelectionWidget
-                        items={this.state.projectorFiles}
-                        selectedName={this.state.selectedMMprojectorModelFile}
-                        onChange={this.handleProjectorModelChange}
-                    />
-                </div>
-
-                <Accordion className="mb-3">
-                    <Accordion.Item eventKey="0">
-                        <Accordion.Header>Model launch parameters</Accordion.Header>
-                        <Accordion.Body>
-                            <ModelLaunchConfig onChange={this.handleLaunchConfChanged} />
-                        </Accordion.Body>
-                    </Accordion.Item>
-                </Accordion>
 
                 <div className="mb-3">
                     <SystemMessageSelectionWidget items={this.state.systemMessages}
@@ -831,9 +482,6 @@ class ConfigurationsPage extends ItemListWithForm {
             <Card key={index} className="mb-3">
                 <Card.Header>{item.name}</Card.Header>
                 <Card.Body>
-                    <div className="mb-3">Repository: {item.model_repo}</div>
-                    <div className="mb-3">Model file: {item.file_name}</div>
-
                     <Accordion className="mb-3">
                         {item.system_message_ro && (
                             <Accordion.Item eventKey="0">
@@ -849,17 +497,6 @@ class ConfigurationsPage extends ItemListWithForm {
                                 </Accordion.Body>
                             </Accordion.Item>
                         )}
-                        <Accordion.Item eventKey="2">
-                            <Accordion.Header>Model launch parameters</Accordion.Header>
-                            <Accordion.Body>
-                                <div>Context size: {item.launch_params.contextSize}</div>
-                                <div># GPU layers: {item.launch_params.ngl}</div>
-                                <div># threads for generation: {item.launch_params.numThreads}</div>
-                                <div># batch threads: {item.launch_params.numBatchThreads}</div>
-                                <div>Batch size: {item.launch_params.batchSize}</div>
-                                <div># tokens to predict: {item.launch_params.nPredict}</div>
-                            </Accordion.Body>
-                        </Accordion.Item>
                     </Accordion>
 
                     {tools.length > 0 && 

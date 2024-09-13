@@ -51,17 +51,6 @@ class Preset(models.Model):
 class Configuration(models.Model):
     name = models.CharField(max_length=100)
 
-    model_repo = models.CharField(max_length=256)
-
-    file_name = models.CharField(max_length=256)
-
-    #depreacated
-    context_size = models.PositiveIntegerField(
-        default=512, validators=[MinValueValidator(1), MaxValueValidator(100000)]
-    )
-
-    launch_params = models.JSONField()
-
     system_message = models.ForeignKey(SystemMessage, related_name="configurations",
                                        blank=True, null=True, on_delete=models.SET_NULL)
     preset = models.ForeignKey(Preset, related_name="configurations",

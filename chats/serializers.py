@@ -37,8 +37,7 @@ class ConfigurationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Configuration
-        fields = ['id', 'name', 'model_repo',
-                  'file_name', 'launch_params', 'system_message',
+        fields = ['id', 'name', 'system_message',
                   'system_message_ro', 'preset', 'preset_ro', 
                   'tools', 'template_spec', 'voice_id', 'user']
 

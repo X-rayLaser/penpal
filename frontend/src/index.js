@@ -20,7 +20,6 @@ import { TextCompletionPage } from './text_completion';
 import { SystemMessageList } from './system_messages';
 import { PresetsPage } from './presets';
 import { ConfigurationsPage } from './configurations';
-import { ModelControlPanel } from './llm_models';
 import { GenericFetchJson } from './generic_components';
 
 class App extends React.Component {
@@ -70,7 +69,6 @@ class App extends React.Component {
 
                                 <Nav.Link href="#my-system-messages">System messages</Nav.Link>
                                 <Nav.Link href="#presets">Presets</Nav.Link>
-                                <Nav.Link href="#models">Models</Nav.Link>
                             </Nav>
                         </Navbar.Collapse>
                         <Navbar.Collapse className="justify-content-end">
@@ -163,10 +161,6 @@ const router = createHashRouter([
             {
                 path: "/my-system-messages/",
                 element: <SystemMessageList />
-            },
-            {
-                path: "/models",
-                element: <ModelControlPanel />
             }
         ]
     }

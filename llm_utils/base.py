@@ -2,28 +2,11 @@ from dataclasses import dataclass
 
 
 class TokenGenerator:
-    def stream_tokens(self, generation_spec):
+    def __call__(self, text):
         raise NotImplementedError
 
-    def start_download(self, repo, file_name, size, llm_store='huggingface'):
-        return 0
-
-    def download_status(self, repo_id, file_name):
-        return {}
-
-    def downloads_in_progress(self):
-        return []
-
-    def failed_downloads(self):
-        return []
-
-    def list_installed_models(self):
-        return [{
-            'repo_id': 'Dummy model',
-            'repo': {},
-            'file_name': 'dummy',
-            'size': 0
-        }]
+    def set_spec(self, sampling_config, stop_word):
+        pass
 
 
 class GenerationError(Exception):

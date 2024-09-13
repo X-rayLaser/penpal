@@ -308,17 +308,10 @@ class PygentifyTextGenerator:
         self.tokens_channel = tokens_channel
 
     def __call__(self, generation_spec):
-        # todo: this won't work for other backends
-        #old_gen = llm_utils.token_generator
-        #base_url = f'http://{old_gen.host}:{old_gen.port}'
-
-        # todo: create PygentifySpec instance from generation_spec; better yet, migrate django code to use pygentify generation spec format
-        # we only need sampling config and stop word
-        
-        #llm = LlamaCpp(base_url, generation_spec, proxies=old_gen.proxies)
-        dummy_gen = llm_utils.token_generator
-        llm = llm_utils.dummy_generators.DummyAdapter(dummy_gen)
-        # todo: we need system message, but at this point it is already part of prompt
+        llm = llm_utils.token_generator
+        stop_word = ["<|tool_use_end|>"]
+        #stop_word = generation_spec.stop_word # todo: this should work
+        llm.set_spec(generation_spec.sampling_config, stop_word)
 
         output_device = ProcessorDevice(self.redis_obj, self.tokens_channel, self)
         temp_output_device = OutputDevice()

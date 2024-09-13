@@ -39,7 +39,6 @@ def whoami(request):
 urlpatterns = [
     path("", spa, name="spa"),
     path("chats/", include("chats.urls")),
-    path("modelhub/", include("modelhub.urls")),
     path("admin/", admin.site.urls),
     path('api-auth/', include('rest_framework.urls')),
     path('accounts/', include('allauth.urls')),

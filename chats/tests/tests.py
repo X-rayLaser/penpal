@@ -366,12 +366,6 @@ class ConfigurationTestCase(AbstractViewSetTestCase):
 
         self.object_data = {
             'name': 'myconf',
-            'model_repo': 'myrepo',
-            'file_name': 'myfile',
-            'launch_params': {
-                'p1': 10,
-                'p2': 20
-            },
             'system_message': system_msg,
             'preset': preset,
             'tools': [],
@@ -384,8 +378,7 @@ class ConfigurationTestCase(AbstractViewSetTestCase):
         })
 
         changes = {
-            "name": "other conf",
-            "model_repo": "other repo"
+            "name": "other conf"
         }
         self.alt_data = dict(self.request_data)
         self.alt_data.update(changes)
@@ -461,9 +454,6 @@ class BaseChatTestCase(AbstractViewSetTestCase):
         preset = dict(id=1, user=self.user.username, **default_preset_data())
         conf_ro = dict(id=1,
                        name='myconf',
-                       model_repo='myrepo',
-                       file_name='myfile',
-                       launch_params={'p1': 10, 'p2': 20},
                        tools=[],
                        user=self.user.username,
                        system_message=1,

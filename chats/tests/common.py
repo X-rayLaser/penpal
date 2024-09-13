@@ -27,12 +27,6 @@ def default_configuration_data(user):
     return {
         'user': user,
         'name': 'myconf',
-        'model_repo': 'myrepo',
-        'file_name': 'myfile',
-        'launch_params': {
-            'p1': 10,
-            'p2': 20
-        },
         'system_message': system_msg,
         'preset': preset,
         'tools': [],

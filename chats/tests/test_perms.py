@@ -260,12 +260,6 @@ def prepare_msg(msg_owner):
 def prepare_conf_data(preset, msg):
     return {
         'name': 'myconf',
-        'model_repo': 'myrepo',
-        'file_name': 'myfile',
-        'launch_params': {
-            'p1': 10,
-            'p2': 20
-        },
         'system_message': msg and msg.id,
         'preset': preset and preset.id,
         'tools': [],

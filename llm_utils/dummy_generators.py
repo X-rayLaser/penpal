@@ -6,7 +6,7 @@ from pygentify.llm_backends import BaseLLM
 
 
 class DummyGenerator(TokenGenerator):
-    def stream_tokens(self, generation_spec):
+    def __call__(self, text):
         words = ["likes", "words", "and", "everyone", "playing", "with"]
 
         for i in range(10):
@@ -18,7 +18,7 @@ class DummyGenerator(TokenGenerator):
 
 
 class DummyPhraseGenerator(TokenGenerator):
-    def stream_tokens(self, generation_spec):
+    def __call__(self, text):
         words = ["The", "quick", "brown", "fox", "jumps", "over", "the", "lazy", "dog", "."]
 
         for word in words:
@@ -33,7 +33,7 @@ class DummyPhraseGenerator(TokenGenerator):
 
 
 class DummyMarkdownGenerator(TokenGenerator):
-    def stream_tokens(self, generation_spec):
+    def __call__(self, text):
         tokens = ["Of", " ", "course", ".", " ", "Here" " ", "is", " ", "the", " ", "code", ":", "\n", 
                   "``", "`", "python", "\n", "for", " ", "i", " in", " ", "range", "(", "5", ")", 
                   ":", "\n", "    ", "print", "(", "'", "hello", " ", "world", "'", ")", "\n", "```"]
@@ -43,7 +43,7 @@ class DummyMarkdownGenerator(TokenGenerator):
 
 
 class DummyToolUseGenerator(TokenGenerator):
-    def stream_tokens(self, generation_spec):
+    def __call__(self, text):
         data = {'tool_name': 'add', 'args': dict(num1=2, num2=3)}
         tokens1 = ["one ", "two ", "three ", "<", "|tool_use_start|>", json.dumps(data),
                    "<|tool_use_end|>", " rest", " to be ", "discarded "]
@@ -73,21 +73,13 @@ css
 
 
 class DummyCodeGenerator(TokenGenerator):
-    def stream_tokens(self, generation_spec):
+    def __call__(self, text):
         for ch in response_with_code:
             time.sleep(0.05)
             yield ch
 
 
 class DummyExceptionRaisingGenerator(TokenGenerator):
-    def stream_tokens(self, generation_spec):
+    def __call__(self, text):
         yield 5 / 0
         yield "hey"
-
-
-class DummyAdapter(BaseLLM):
-    def __init__(self, dummy_generator):
-        self.generator = dummy_generator
-
-    def __call__(self, text):
-        yield from self.generator.stream_tokens(None)

@@ -23,8 +23,7 @@ INSTALLED_APPS = [
     'allauth.account',
 
     'rest_framework',
-    'chats',
-    'modelhub'
+    'chats'
 ]
 
 MIDDLEWARE = [
