@@ -43,6 +43,12 @@ class GeneratorWithRetries:
 
 
 class OutputDevice:
+    def __init__(self):
+        self.channels = []
+
+    def open_channels(self, channels):
+        self.channels = list(channels)
+
     def __call__(self, new_text):
         pass
 
@@ -52,6 +58,7 @@ class OutputDevice:
 
 class FileOutputDevice(OutputDevice):
     def __init__(self, file_path):
+        super().__init__()
         self.file_path = file_path
         self.cache = TextCache()
 
@@ -221,15 +228,6 @@ class Agent(ObservableMixin):
             language = language or ''
             language = language.lower()
             interpreter = self.interpreters.get(language, self.default_interpreter)
-
-            def on_split(js_code, css_code):
-                self.notify("webpack_build_started", js_code=js_code, css_code=css_code)
-
-            def on_result(result_dict):
-                self.notify("webpack_build_finished", result_dict=result_dict)
-
-            interpreter.add_listener("code_split", on_split)
-            interpreter.add_listener("webpack_build_finished", on_result)
             interpreter(prefix, code)
             return
 
@@ -252,10 +250,13 @@ class Agent(ObservableMixin):
             self._create_and_process_message(self.chat_factory.create_tool_call, action, arg_dict)
             self._perform_action(action, arg_dict)
 
-    def _create_and_process_message(self, create_fn, *args):
+    def _create_and_process_message(self, create_fn, channels="all", *args):
         msg = create_fn(*args)
         self.history.append(msg)
-        self.output_device(msg.content.render())
+
+        device_channels = set(self.output_device.channels)
+        if channels == "all" or device_channels.intersection(channels):
+            self.output_device(msg.content.render())
 
     def _get_action(self, body):
         try:
@@ -343,14 +344,38 @@ class Interpreter(ObservableMixin):
         self.listeners = {}
 
     def __call__(self, prefix, code, language=None):
-        raise NotImplementedError
+        if language:
+            code = code[len(language):]
+        
+        language = language or self.language
+        msg = self.agent.chat_factory.create_ai_msg(f'{prefix}```{language}\n{code}```')
+        self.agent.history.append(msg)
+
+    def run_remote_command(self, event_start_name, event_end_name, run_command, result_extra=None, **kwargs):
+        self.agent.notify(event_start_name, **kwargs)
+        try:
+            result = run_command(**kwargs)
+            stdout = result["stdout"]
+            stderr = result["stderr"]
+            return_code = result["return_code"]
+            result_dict = result
+
+            output = f'Return code: {return_code}\nStandard Output Stream:\n{stdout}\nStandard Error Stream:\n{stderr}\n'
+
+            runner = self.code_runner.upper()
+            text = f'{runner} START\n{output}\n{runner} END'
+            channels = ["sandbox"]
+            self.agent._create_and_process_message(self.agent.chat_factory.create_ai_msg, channels, text)
+        except Exception as e:
+            result_dict = dict(error=str(e))
+        finally:
+            result_dict.update(result_extra or {})
+            self.agent.notify(event_end_name, result_dict=result_dict)
+        return result_dict
 
 
 class IgnoringInterpreter(Interpreter):
-    def __call__(self, prefix, code, language=None):
-        language = language or ""
-        msg = self.agent.chat_factory.create_ai_msg(f'{prefix}```{language}\n{code}```')
-        self.agent.history.append(msg)
+    language = ""
 
 
 class WebInterpreter(Interpreter):
@@ -363,9 +388,10 @@ class WebInterpreter(Interpreter):
         except ValueError:
             output = 'Error: Missing mandatory javascript code block'
             text = f'WEBPACK CONSOLE START\n{output}\nWEBPACK CONSOLE END'
-            self.agent._create_and_process_message(self.agent.chat_factory.create_ai_msg, text)
+            channels = ["sandbox"]
+            self.agent._create_and_process_message(self.agent.chat_factory.create_ai_msg, channels, text)
         else:
-            self.notify("code_split", js_code=js_code, css_code=css_code)
+            self.agent.notify("webpack_build_started", js_code=js_code, css_code=css_code)
             self.send_code(js_code, css_code)
 
     def split_code(self, code):
@@ -396,65 +422,93 @@ class WebInterpreter(Interpreter):
 
             text = f'WEBPACK CONSOLE START\n{output}\nWEBPACK CONSOLE END'
 
-            self.agent._create_and_process_message(self.agent.chat_factory.create_ai_msg, text)
+            channels = ["sandbox"]
+            self.agent._create_and_process_message(self.agent.chat_factory.create_ai_msg, channels, text)
         except Exception as e:
             print("problem", str(e))
             event_data = dict(webpack_internal_error=str(e))
         finally:
-            self.notify("webpack_build_finished", result_dict=event_data)
+            self.agent.notify("webpack_build_finished", result_dict=event_data)
 
     def get_lang_section_start(self, code, lang_marker):
         idx = code.index(lang_marker)
         return idx, idx + len(lang_marker)
 
 
-class PythonInterpreter(Interpreter):
+class InterpretableLanguageInterpreter(Interpreter):
+    language = ""
+    code_runner = ""
+
     def __call__(self, prefix, code, language=None):
-        if language:
-            code = code[len(language):]
-        msg = self.agent.chat_factory.create_ai_msg(f'{prefix}```python\n{code}```')
-        self.agent.history.append(msg)
+        super().__call__(prefix, code, language)
 
-        try:
-            result = code_interpreter(code)
-            stdout = result["stdout"]
-            stderr = result["stderr"]
-            return_code = result["return_code"]
+        result_extra = {
+            "environment": self.language,
+            "code_runner": self.code_runner
+        }
+        self.run_remote_command(self, "code_execution_started", "code_execution_finished", 
+                                self.run_command, result_extra=result_extra, code=code)
 
-            output = f'Return code: {return_code}\nStandard Output Stream:\n{stdout}\nStandard Error Stream:\n{stderr}\n'
-
-            text = f'PYTHON INTERPRETER START\n{output}\nPYTHON INTERPRETER END'
-            #import json
-            #text = json.dumps({"python_interpreter": result})
-            self.agent._create_and_process_message(self.agent.chat_factory.create_ai_msg, text)
-        except Exception as e:
-            pass
+    def run_command(self, code=None):
+        raise Exception("implement this")
 
 
-class JavascriptInterpreter(Interpreter):
+class PythonInterpreter(InterpretableLanguageInterpreter):
+    language = "python"
+    code_runner = "python interpreter"
+
+    def run_command(self, code=None):
+        return code_interpreter(code)
+
+
+class JavascriptInterpreter(InterpretableLanguageInterpreter):
+    language = "javascript"
+    code_runner = "node"
+
+    def run_command(self, code=None):
+        raise Exception("implement this")
+
+
+class CompiledLanguageInterpreter(Interpreter):
+    language = ""
+    compiler = ""
+    code_runner = ""
+
     def __call__(self, prefix, code, language=None):
-        if language:
-            code = code[len(language):]
+        super().__call__(prefix, code, language)
+        compile_extra = {
+            "environment": self.language,
+            "compiler": self.compiler
+        }
 
-        msg = self.agent.chat_factory.create_ai_msg(f'{prefix}```javascript\n{code}```')
-        self.agent.history.append(msg)
+        running_extra = {
+            "environment": self.language,
+            "code_runner": self.code_runner
+        }
+        result_dict = self.run_remote_command(self, "compilation_started", "compilation_finished",
+                                              self.compile_code, result_extra=compile_extra,
+                                              code=code)
+        result_dict = self.run_remote_command(self, "code_execution_started", "code_execution_finished",
+                                              self.execute_code, result_extra=running_extra,
+                                              result_dict=result_dict)
 
-        try:
-            result = react_app_maker(code, css_code='')
-            webpack_logs = result["logs"]["webpack"]
-            stdout = webpack_logs["stdout"]
-            stderr = webpack_logs["stderr"]
-            return_code = webpack_logs["return_code"]
-            success = webpack_logs["build_success"]
+    def compile_code(self, code=None):
+        raise NotImplementedError
 
-            output = f'Successful build: {success}\nReturn code: {return_code}\nStandard Output Stream:\n{stdout}\nStandard Error Stream:\n{stderr}\n'
+    def execute_code(self, result_dict=None):
+        raise NotImplementedError
 
-            text = f'WEBPACK CONSOLE START\n{output}\nWEBPACK CONSOLE END'
 
-            self.agent._create_and_process_message(self.agent.chat_factory.create_ai_msg, text)
-            print("show text", text)
-        except Exception as e:
-            print("problem", str(e))
+class CPlusPlusInterpreter(CompiledLanguageInterpreter):
+    language = "c++"
+    compiler = "g++"
+    code_runner = "native"
+
+
+class JavaInterpreter(CompiledLanguageInterpreter):
+    language = "java"
+    compiler = "jdk"
+    code_runner = "jvm"
 
 
 class NullAssistant:

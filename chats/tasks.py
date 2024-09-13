@@ -267,6 +267,7 @@ def get_prompt(message, chat_encoder_cls):
 
 class ProcessorDevice(OutputDevice):
     def __init__(self, redis_obj, channel, sentence_processor):
+        super().__init__()
         self.redis_obj = redis_obj
         self.channel = channel
         self.cache = TextCache()
