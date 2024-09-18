@@ -320,7 +320,7 @@ class PygentifyTextGenerator:
         tools = tool_registry
         agent = Agent(llm, tools=tools, system_message="", output_device=output_device,
                       temp_output_device=temp_output_device,
-                      default_interpreter_class=default_interpreter_class, max_rounds=1)
+                      default_interpreter_class=default_interpreter_class, max_rounds=15)
 
         agent.add_listener("webpack_build_started", self.process_build_start)
         agent.add_listener("webpack_build_finished", self.process_build_finished)

@@ -232,22 +232,22 @@ class Agent(ObservableMixin):
             return
 
         if not self.tool_use_helper.contains_tool_use(response):
-            self._create_and_process_message(self.chat_factory.create_ai_msg, response)
+            self._create_and_process_message(self.chat_factory.create_ai_msg, "all", response)
             return
 
         offset, length, body = self.tool_use_helper.find(response)
         pre_tool_text = response[:offset]
-        self._create_and_process_message(self.chat_factory.create_ai_msg, pre_tool_text)
+        self._create_and_process_message(self.chat_factory.create_ai_msg, "all", pre_tool_text)
 
         try:
             action, arg_dict = self._get_action(body)
         except InvalidJsonError as exc:
             error, body = exc.args
-            self._create_and_process_message(self.chat_factory.create_raw_tool_call, body)
-            self._create_and_process_message(self.chat_factory.create_tool_parse_error, error)
+            self._create_and_process_message(self.chat_factory.create_raw_tool_call, "all", body)
+            self._create_and_process_message(self.chat_factory.create_tool_parse_error, "all", error)
         else:
             self.notify("tool_call_started", name=action, arg_dict=arg_dict)
-            self._create_and_process_message(self.chat_factory.create_tool_call, action, arg_dict)
+            self._create_and_process_message(self.chat_factory.create_tool_call, "all", action, arg_dict)
             self._perform_action(action, arg_dict)
 
     def _create_and_process_message(self, create_fn, channels="all", *args):

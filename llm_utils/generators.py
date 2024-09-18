@@ -84,7 +84,6 @@ class LlamaCppServer(TokenGenerator):
     def __call__(self, text):
         llm = LlamaCpp(self.endpoint, self.generation_spec, self.proxies)
         yield from llm(text)
-        return super().__call__(text)
 
 
 def clean_llm_settings(llm_settings):
