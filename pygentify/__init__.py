@@ -2,6 +2,7 @@ from __future__ import annotations
 import json
 import sys
 import os
+import uuid
 from .chat_render import ChatRendererToString, default_template
 from .llm_backends import BaseLLM, LlamaCpp, GenerationSpec
 from .tools import *
@@ -115,8 +116,7 @@ class Agent(ObservableMixin):
     default_done_tool = lambda *args, **kwargs: kwargs
 
     def __init__(self, llm, tools, done_tool=None, system_message="",
-                 max_rounds=5, output_device=None, temp_output_device=None,
-                 interpreter_classes=None, default_interpreter_class=None):
+                 max_rounds=5, output_device=None, temp_output_device=None):
         self.llm = llm
         self.tools = tools
         self.done_tool = done_tool or self.default_done_tool
@@ -125,12 +125,7 @@ class Agent(ObservableMixin):
         self.output_device = output_device or OutputDevice()
         self.temp_output_device = temp_output_device or self.create_temp_terminal()
 
-        interpreter_classes = interpreter_classes or {}
-        interpreters = {lang: cls(self) for lang, cls in interpreter_classes.items()}
-        self.interpreters = interpreters or {}
-        default_interpreter = default_interpreter_class or IgnoringInterpreter
-        self.default_interpreter = default_interpreter(self)
-
+        self.sandboxes = {}
         self.sub_agents = {}
         self.parent = None
 
@@ -142,6 +137,9 @@ class Agent(ObservableMixin):
         self.tool_use_helper = SimpleTagBasedToolUse.create_default()
         self.chat_factory = JinjaChatFactory('llama3', self.tool_use_helper)
         self.chat_renderer = self.chat_factory.get_chat_renderer()
+
+    def add_sandbox(self, sandbox):
+        self.sandboxes[sandbox.project_type] = sandbox
 
     def create_temp_terminal(self):
         if not isinstance(self.output_device, FileOutputDevice):
@@ -225,10 +223,10 @@ class Agent(ObservableMixin):
         code_invocation = find_code(response)
         if code_invocation is not None:
             prefix, code, language = code_invocation
-            language = language or ''
-            language = language.lower()
-            interpreter = self.interpreters.get(language, self.default_interpreter)
-            interpreter(prefix, code)
+
+            msg = self.chat_factory.create_ai_msg(f'{prefix}```\n{code}```')
+            self.history.append(msg)
+            self._execute_code(code)
             return
 
         if not self.tool_use_helper.contains_tool_use(response):
@@ -249,6 +247,25 @@ class Agent(ObservableMixin):
             self.notify("tool_call_started", name=action, arg_dict=arg_dict)
             self._create_and_process_message(self.chat_factory.create_tool_call, "all", action, arg_dict)
             self._perform_action(action, arg_dict)
+
+    def _execute_code(self, code):
+        channels = ["sandbox"]
+
+        try:
+            analyzer = ListingAnalyzer()
+            src_tree, project_type = analyzer(code)
+        except Exception as e:
+            error = e.args[0]
+            self._create_and_process_message(self.chat_factory.create_ai_msg, channels, error)
+        else:
+            sandbox = self.sandboxes.get(project_type)
+
+            if not sandbox:
+                error = f'Cannot handle this project type: "{project_type}"'
+                self._create_and_process_message(self.chat_factory.create_ai_msg, channels, error)
+                return
+
+            sandbox(src_tree)
 
     def _create_and_process_message(self, create_fn, channels="all", *args):
         msg = create_fn(*args)
@@ -338,200 +355,209 @@ class Agent(ObservableMixin):
         return collate(messages)
 
 
-class Interpreter(ObservableMixin):
-    def __init__(self, agent):
-        self.agent = agent
-        self.listeners = {}
-
-    def __call__(self, prefix, code, language=None):
-        if language:
-            code = code[len(language):]
-        
-        language = language or self.language
-        msg = self.agent.chat_factory.create_ai_msg(f'{prefix}```{language}\n{code}```')
-        self.agent.history.append(msg)
-
-    def run_remote_command(self, event_start_name, event_end_name, run_command, result_extra=None, **kwargs):
-        self.agent.notify(event_start_name, **kwargs)
+class ListingAnalyzer:
+    def __call__(self, code_listing):
         try:
-            result = run_command(**kwargs)
-            stdout = result["stdout"]
-            stderr = result["stderr"]
-            return_code = result["return_code"]
-            result_dict = result
-
-            output = f'Return code: {return_code}\nStandard Output Stream:\n{stdout}\nStandard Error Stream:\n{stderr}\n'
-
-            runner = self.code_runner.upper()
-            text = f'{runner} START\n{output}\n{runner} END'
-            channels = ["sandbox"]
-            self.agent._create_and_process_message(self.agent.chat_factory.create_ai_msg, channels, text)
-        except Exception as e:
-            result_dict = dict(error=str(e))
-        finally:
-            result_dict.update(result_extra or {})
-            self.agent.notify(event_end_name, result_dict=result_dict)
-        return result_dict
-
-
-class IgnoringInterpreter(Interpreter):
-    language = ""
-
-
-class WebInterpreter(Interpreter):
-    def __init__(self, agent):
-        super().__init__(agent)
-        self.build_id = 0
-        self.build_files = []
-
-    def __call__(self, prefix, code, language=None):
-        msg = self.agent.chat_factory.create_ai_msg(f'{prefix}```\n{code}```')
-        self.agent.history.append(msg)
-
-        try:
-            js_code, css_code = self.split_code(code)
+            src_tree = self.parse_listing(code_listing)
         except ValueError:
             output = 'Error: Missing mandatory javascript code block'
             text = f'WEBPACK CONSOLE START\n{output}\nWEBPACK CONSOLE END'
-            channels = ["sandbox"]
-            self.agent._create_and_process_message(self.agent.chat_factory.create_ai_msg, channels, text)
-        else:
-            import uuid
-            self.build_id = uuid.uuid4().hex
+            raise Exception(text)
+        project_type = self.get_project_type(src_tree)
+        return src_tree, project_type
 
-            self.build_files = [{
-                'name': 'js_code',
-                'content': js_code
-            }, {
-                'name': 'css_code',
-                'content': css_code
-            }]
-            self.agent.notify("webpack_build_started", build_id=self.build_id, files=self.build_files)
-            self.send_code(js_code, css_code)
+    def parse_listing(self, code_listing):
+        def get_lang_section_start(code, lang_marker):
+            idx = code.index(lang_marker)
+            return idx, idx + len(lang_marker)
 
-    def split_code(self, code):
-        _, js_start = self.get_lang_section_start(code, 'javascript')
+        _, js_start = get_lang_section_start(code_listing, 'javascript')
 
         try:
-            js_end, css_start = self.get_lang_section_start(code, 'css')
-            css_code = code[css_start:]
+            js_end, css_start = get_lang_section_start(code_listing, 'css')
+            css_code = code_listing[css_start:]
         except ValueError:
             css_code = ''
-            js_end = len(code)
+            js_end = len(code_listing)
 
-        js_code = code[js_start:js_end]
-        return js_code, css_code
+        js_code = code_listing[js_start:js_end]
 
-    def send_code(self, js_code, css_code):
+        return [{
+            'name': 'js_code',
+            'content': js_code
+        }, {
+            'name': 'css_code',
+            'content': css_code
+        }]
+
+    def get_project_type(self, src_tree):
+        return STYLED_REACT_COMPONENT_PROJECT
+
+
+STYLED_REACT_COMPONENT_PROJECT = "STYLED_REACT_COMPONENT_PROJECT"
+PYTHON_PROJECT = "PYTHON_PROJECT"
+JAVASCRIPT_PROJECT = "JAVASCRIPT_PROJECT"
+
+
+def post_json(url, data, error='Operation failed: "{}"'):
+    headers = headers={'content-type': 'application/json'}
+    resp = requests.post(url, data=json.dumps(data), headers=headers)
+
+    if resp.ok:
+        return resp.json()
+    
+    error = error.format(resp.reason)
+    raise Exception(error)
+
+
+def run_build_remotely(url, src_tree):
+    data = dict(src_tree=src_tree)
+    return post_json(url, data=data, error='Remote build failed: "{}"')
+
+
+def run_code_remotely(url, src_tree, launcher, entrypoint=''):
+    data = dict(src_tree=src_tree, launcher=launcher, entrypoint=entrypoint)
+    return post_json(url, data, error='Failed to run code remotely: "{}"')
+
+
+def run_compiled_code(url, executable_path, launcher):
+    data = dict(executable_path=executable_path, launcher=launcher)
+    return post_json(url, data, error='Failed to run compiled code remotely: "{}"')
+
+
+class CommandExecutor:
+    event_started = "event_started"
+    event_finished = "event_finished"
+    output_template = "{}"
+
+    def __init__(self, agent, command, args_dict, output_template=""):
+        self.agent = agent
+        self.command = command
+        self.args_dict = args_dict
+        if output_template:
+            self.output_template = output_template
+
+    def __call__(self, context):
+        context = dict(context)
+        context["id"] = uuid.uuid4().hex
+        self.agent.notify(self.event_started, context=context)
+        result_dict = self.run_command()
+        result_dict.update(context or {})
+        self.agent.notify(self.event_finished, result=result_dict)
+        return result_dict
+
+    def run_command(self):
         try:
-            result = react_app_maker(js_code, css_code)
-            webpack_logs = result["logs"]["webpack"]
-            stdout = webpack_logs["stdout"]
-            stderr = webpack_logs["stderr"]
-            return_code = webpack_logs["return_code"]
-            success = webpack_logs["build_success"]
-            status = 'success' if success else 'error'
+            result = self.command(**self.args_dict)
+            stdout = result["stdout"]
+            stderr = result["stderr"]
+            return_code = result["return_code"]
 
-            output = f'Successful build: {success}\nReturn code: {return_code}\nStandard Output Stream:\n{stdout}\nStandard Error Stream:\n{stderr}\n'
-
-            text = f'WEBPACK CONSOLE START\n{output}\nWEBPACK CONSOLE END'
-
+            text = self.format_output(stdout, stderr, return_code)
             channels = ["sandbox"]
             self.agent._create_and_process_message(self.agent.chat_factory.create_ai_msg, channels, text)
         except Exception as e:
-            print("problem", str(e))
-            status = 'error'
-            stdout = ''
-            stderr = str(e)
-            return_code = 999
-        finally:            
-            res = dict(status=status,
-                       return_code=return_code,
-                       stdout=stdout,
-                       stderr=stderr,
-                       files=self.build_files,
-                       url='http://localhost/')
-            self.agent.notify("webpack_build_finished", build_id=self.build_id, result=res)
+            result = dict(error=str(e))
 
-    def get_lang_section_start(self, code, lang_marker):
-        idx = code.index(lang_marker)
-        return idx, idx + len(lang_marker)
+        return result
+
+    def format_output(self, stdout, stderr, return_code):
+        output = f'Return code: {return_code}\nStandard Output Stream:\n{stdout}\nStandard Error Stream:\n{stderr}\n'
+        return self.output_template.format(output)
 
 
-class InterpretableLanguageInterpreter(Interpreter):
-    language = ""
-    code_runner = ""
-
-    def __call__(self, prefix, code, language=None):
-        super().__call__(prefix, code, language)
-
-        result_extra = {
-            "environment": self.language,
-            "code_runner": self.code_runner
-        }
-        self.run_remote_command(self, "code_execution_started", "code_execution_finished", 
-                                self.run_command, result_extra=result_extra, code=code)
-
-    def run_command(self, code=None):
-        raise Exception("implement this")
+class BuildCommandExecutor(CommandExecutor):
+    event_started = "build_started"
+    event_finished = "build_finished"
 
 
-class PythonInterpreter(InterpretableLanguageInterpreter):
-    language = "python"
-    code_runner = "python interpreter"
-
-    def run_command(self, code=None):
-        return code_interpreter(code)
+class CodeExecutor(CommandExecutor):
+    event_started = "code_execution_started"
+    event_finished = "code_execution_finished"
+    output_template = "CODE EXECUTION START\n{}\nCODE EXECUTION END"
 
 
-class JavascriptInterpreter(InterpretableLanguageInterpreter):
-    language = "javascript"
-    code_runner = "node"
+class BaseSandbox(ObservableMixin):
+    project_type = ""
 
-    def run_command(self, code=None):
-        raise Exception("implement this")
+    def __init__(self, agent, endpoint):
+        self.agent = agent
+        self.endpoint = endpoint
+        self.listeners = {}
 
-
-class CompiledLanguageInterpreter(Interpreter):
-    language = ""
-    compiler = ""
-    code_runner = ""
-
-    def __call__(self, prefix, code, language=None):
-        super().__call__(prefix, code, language)
-        compile_extra = {
-            "environment": self.language,
-            "compiler": self.compiler
-        }
-
-        running_extra = {
-            "environment": self.language,
-            "code_runner": self.code_runner
-        }
-        result_dict = self.run_remote_command(self, "compilation_started", "compilation_finished",
-                                              self.compile_code, result_extra=compile_extra,
-                                              code=code)
-        result_dict = self.run_remote_command(self, "code_execution_started", "code_execution_finished",
-                                              self.execute_code, result_extra=running_extra,
-                                              result_dict=result_dict)
-
-    def compile_code(self, code=None):
+    def __call__(self, src_tree):
         raise NotImplementedError
 
-    def execute_code(self, result_dict=None):
-        raise NotImplementedError
+    def build_code(self, src_tree, build_tool, **extra_context):
+        context = self.get_context(src_tree, build_tool=build_tool, **extra_context)
+
+        args_dict = dict(url=self.endpoint, src_tree=src_tree)
+        output_template = 'BUILD START\n{}\nBUILD END'
+        executor = BuildCommandExecutor(self.agent, command=run_build_remotely,
+                                        args_dict=args_dict, output_template=output_template)
+        return executor(context)
+
+    def run_code(self, src_tree, launcher, **extra_context):
+        context = self.get_context(src_tree, launcher=launcher, **extra_context)
+
+        args_dict = dict(url=self.endpoint, src_tree=src_tree, launcher=launcher)
+        executor = CodeExecutor(self.agent, command=run_code_remotely, args_dict=args_dict)
+
+        return executor(context)
+
+    def run_compiled_code(self, src_tree, executable_path, launcher, **extra_context):
+        context = self.get_context(src_tree, launcher=launcher, **extra_context)
+
+        args_dict = dict(url=self.endpoint, executable_path=executable_path, launcher=launcher)
+        executor = CodeExecutor(self.agent, command=run_compiled_code, args_dict=args_dict)
+
+        return executor(context)
+
+    def get_context(self, src_tree, **kwargs):
+        return {
+            "project_type": self.project_type,
+            "src_tree": src_tree,
+            **kwargs
+        }
 
 
-class CPlusPlusInterpreter(CompiledLanguageInterpreter):
-    language = "c++"
-    compiler = "g++"
-    code_runner = "native"
+class StyledReactComponentSandbox(BaseSandbox):
+    project_type = STYLED_REACT_COMPONENT_PROJECT
+
+    def __call__(self, src_tree):
+        return self.build_code(src_tree, build_tool="webpack", url="http://localhost")
 
 
-class JavaInterpreter(CompiledLanguageInterpreter):
-    language = "java"
-    compiler = "jdk"
-    code_runner = "jvm"
+class InterpretableLanguageSandbox(BaseSandbox):
+    launcher = ""
+
+    def __call__(self, src_tree):
+        return self.run_code(src_tree, self.launcher)
+
+
+class PythonSandbox(InterpretableLanguageSandbox):
+    project_type = PYTHON_PROJECT
+    launcher = "python"
+
+
+class JavascriptSandbox(InterpretableLanguageSandbox):
+    project_type = JAVASCRIPT_PROJECT
+    launcher = "node"
+
+
+class CompiledLanguageSandbox(BaseSandbox):
+    build_tool = ""
+    launcher = ""
+
+    def __call__(self, src_tree):
+        result_dict = self.build_code(src_tree, self.build_tool)
+        path = result_dict["executable_path"]
+        return self.run_compiled_code(src_tree, path, self.launcher)
+
+
+class CPlusPlusSandbox(CompiledLanguageSandbox):
+    build_tool = "g++"
+    launcher = None
 
 
 class NullAssistant:

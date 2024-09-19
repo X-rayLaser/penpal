@@ -10,42 +10,9 @@ import Button from 'react-bootstrap/Button';
 import Tab from 'react-bootstrap/Tab';
 import Tabs from 'react-bootstrap/Tabs';
 
-let myBuilds = [
-    {
-        url: "http://localhost:45344",
-        status: "success",
-        stdout: "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. ",
-        stderr: "warning: Reassignment to the variable",
-        files: [{
-            name: 'index.html', content: "<html>\n<body>\nhello</body></html"
-        }, {
-            name: 'index.js', content: "var x = 43;\nvar y = 25"
-        }]
-    },
-    {
-        status: "error",
-        stdout: "Build was unsuccessful",
-        stderr: "warning: Reassignment to the variable",
-        files: [{
-            name: 'index.html', content: "<html>\n<body>\nhello</body></html"
-        }, {
-            name: 'index.js', content: "var x = 43;\nvar y = 25"
-        }]
-    },
-    {
-        status: "pending",
-        stdout: "In progress",
-        stderr: "warning: Reassignment to the variable",
-        files: [{
-            name: 'index.html', content: "<html>\n<body>\nhello</body></html"
-        }, {
-            name: 'index.js', content: "var x = 43;\nvar y = 25"
-        }]
-    }
-]
 
 export function WebpackBuildsContainer({ builds }) {
-    console.log("builds", builds)
+
     return (
         <Card bg="info" text="light">
             <Card.Header>Builds</Card.Header>
@@ -68,10 +35,11 @@ export function WebpackBuilds({ builds }) {
 
 
 function AccordionBuild({ buildObj, id }) {
+    let status = buildObj.status || mapToStatus(buildObj);
     return (
         <Accordion.Item eventKey={`${id}`}>
             <Accordion.Header>
-                <AccordionHeader name="Webpack" status={buildObj.status} />
+                <AccordionHeader name="Webpack" status={status} />
             </Accordion.Header>
             <Accordion.Body>
                 <BuildBody {...buildObj} />
@@ -92,15 +60,7 @@ export function ToolCallSection({ toolCalls }) {
 }
 
 function ToolCall({ toolObject, id }) {
-    let status;
-    if (toolObject.result) {
-        status = 'success';
-    } else if (toolObject.error) {
-        status = 'error';
-    } else {
-        status = 'pending';
-    }
-
+    let status = mapToStatus(toolObject);
     let name = toolObject.name;
     let argsArray = [];
 
@@ -141,6 +101,19 @@ function ToolCall({ toolObject, id }) {
 }
 
 
+function mapToStatus(obj) {
+    let status;
+    if (obj.result) {
+        status = 'success';
+    } else if (obj.error) {
+        status = 'error';
+    } else {
+        status = 'pending';
+    }
+    return status;
+}
+
+
 function AccordionHeader({ name, status }) {
     let statusElement;
     let textColor;
@@ -169,7 +142,8 @@ function AccordionHeader({ name, status }) {
 }
 
 
-function BuildBody({ status, stdout, stderr, files, url="" }) {
+function BuildBody({ status, stdout, stderr, src_tree, url="" }) {
+    let files = src_tree;
     let tree = files.map(({ name }) => name);
 
     let stdoutHtml = {

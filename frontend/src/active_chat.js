@@ -648,7 +648,7 @@ class ActiveChat extends React.Component {
                     }
                 });
             } else if (payload.event === "generation_error") {
-                let reason = payload.data;
+                let reason = payloadData;
                 console.error("Generation failed: ", reason);
                 this.setState({
                     prompt: "",
@@ -657,36 +657,41 @@ class ActiveChat extends React.Component {
                     contextLoaded: true,
                     generationError: reason
                 });
-            } else if (payload.event === "webpack_build_started") {
+            } else if (payload.event === "build_started") {
                 this.setState(prevState => ({
                     active_builds: [...prevState.active_builds, {
-                        id: payload.data.id,
-                        status: 'pending',
-                        files: payload.data.files || []
+                        ...payloadData,
+                        status: 'pending'
                     }]
                 }));
-            } else if (payload.event === "webpack_build_finished") {
+            } else if (payload.event === "build_finished") {
                 this.setState(prevState => {
                     let active_builds = prevState.active_builds.filter(build => build.id !== payloadData.id);
-                    let finished_builds = [...prevState.finished_builds, {
-                        url: payloadData.url,
-                        status: payloadData.status,
-                        stdout: payloadData.stdout,
-                        stderr: payloadData.stderr,
-                        return_code: payloadData.return_code,
-                        files: payloadData.files || []
-                    }];
+                    let finished_builds = [...prevState.finished_builds, payloadData];
                     return {
                         active_builds,
                         finished_builds
                     };
                 });
+            } else if (payload.event === "code_execution_started") {
+                this.setState(prevState => ({
+                    running_programs: [...prevState.running_programs, {
+                        ...payloadData,
+                        status: 'pending'
+                    }]
+                }));
+            } else if (payload.event === "code_execution_finished") {
+                this.setState(prevState => {
+                    let running_programs = prevState.running_programs.filter(program => program.id !== payloadData.id);
+                    let finished_programs = [...prevState.finished_programs, payloadData];
+                    return {
+                        running_programs,
+                        finished_programs
+                    };
+                });
             } else if (payload.event === "tool_call_started") {
                 this.setState(prevState => ({
-                    pending_tool_calls: [...prevState.pending_tool_calls, {
-                        name: payloadData.name,
-                        arguments: payloadData.arguments
-                    }]
+                    pending_tool_calls: [...prevState.pending_tool_calls, payloadData]
                 }));
             } else if (payload.event === "tool_call_finished") {
                 this.setState(prevState => {
@@ -708,10 +713,8 @@ class ActiveChat extends React.Component {
                     return {
                         pending_tool_calls,
                         finished_tool_calls: [...prevState.finished_tool_calls, {
-                            name: payloadData.name,
-                            arguments: finishedOne.arguments,
-                            result: payloadData.result || "",
-                            error: payloadData.error || ""
+                            ...payloadData,
+                            arguments: finishedOne.arguments
                         }]
                     };
                 });

@@ -25,7 +25,9 @@ from tools.api_calls import (
 )
 from .utils import join_wavs
 from tools import get_specification
-from pygentify import Agent, OutputDevice, TextCache, WebInterpreter, TooManyRoundsError
+from pygentify import (
+    Agent, OutputDevice, TextCache, TooManyRoundsError, PythonSandbox, StyledReactComponentSandbox
+)
 from pygentify.llm_backends import LlamaCpp, GenerationSpec as PygentifySpec
 from pygentify.messages import JinjaChatFactory
 from pygentify.tool_calling import SimpleTagBasedToolUse, tool_registry
@@ -309,23 +311,32 @@ class PygentifyTextGenerator:
 
     def __call__(self, generation_spec):
         llm = llm_utils.token_generator
-        stop_word = ["<|tool_use_end|>"]
+        stop_word = ["<|tool_use_end|>", "```\n"]
         #stop_word = generation_spec.stop_word # todo: this should work
         llm.set_spec(generation_spec.sampling_config, stop_word)
 
         output_device = ProcessorDevice(self.redis_obj, self.tokens_channel, self)
         temp_output_device = OutputDevice()
-        default_interpreter_class = WebInterpreter
 
         tools = tool_registry
         agent = Agent(llm, tools=tools, system_message="", output_device=output_device,
-                      temp_output_device=temp_output_device,
-                      default_interpreter_class=default_interpreter_class, max_rounds=15)
+                      temp_output_device=temp_output_device, max_rounds=1)
+        
+        agent.add_sandbox(PythonSandbox(
+            agent, endpoint="http://localhost:9800/run_code/"
+        ))
+        agent.add_sandbox(StyledReactComponentSandbox(
+            agent, endpoint="http://172.17.0.1:9900/make_react_app/"
+        ))
 
-        agent.add_listener("webpack_build_started", self.process_build_start)
-        agent.add_listener("webpack_build_finished", self.process_build_finished)
         agent.add_listener("tool_call_started", self.process_tool_call)
         agent.add_listener("tool_call_finished", self.process_tool_result)
+
+        agent.add_listener("build_started", self.process_build_start)
+        agent.add_listener("build_finished", self.process_build_finished)
+
+        agent.add_listener("code_execution_started", self.process_code_execution_started)
+        agent.add_listener("code_execution_finished", self.process_code_execution_finished)
         
         agent.history = generation_spec.history[:-1]
         last_msg = generation_spec.history[-1].content.render()
@@ -352,12 +363,17 @@ class PygentifyTextGenerator:
     def process_api_call_segment(self, text):
         pass
 
-    def process_build_start(self, build_id, files):
+    def process_build_start(self, context: dict):
         pass
 
-    def process_build_finished(self, build_id, result: dict):
+    def process_build_finished(self, result: dict):
         pass
 
+    def process_code_execution_started(self, context: dict):
+        pass
+
+    def process_code_execution_finished(self, result: dict):
+        pass
 
 
 def fix_linebreaks(s):
@@ -412,23 +428,37 @@ class PygentifyProducer(PygentifyTextGenerator):
         msg = {'event': 'generation_paused', 'data': text}
         self.redis_obj.publish(self.tokens_channel, json.dumps(msg))
 
-    def process_build_start(self, build_id, files):
-        msg = {
-            'build_event': 'webpack_build_started',
-            'id': build_id,
-            'files': format_files(files)
-        }
+    def process_build_start(self, context):
+        self._notify_event_started("build_started", context)
+
+    def process_build_finished(self, result: dict):
+        self._notify_event_finished("build_finished", result)
+
+    def process_code_execution_started(self, context: dict):
+        self._notify_event_started("code_execution_started", context)
+
+    def process_code_execution_finished(self, result: dict):
+        self._notify_event_finished("code_execution_finished", result)
+
+    def _notify_event_started(self, event_type, data):
+        msg = dict(data)
+        self.fix_field_if_exists(msg, "src_tree", format_files)
+
+        msg['build_event'] = event_type
         self.redis_obj.publish(self.builds_channel, json.dumps(msg))
 
-    def process_build_finished(self, build_id, result: dict):
-        result = dict(result)
-        result["stdout"] = fix_linebreaks(result["stdout"])
-        result["stderr"] = fix_linebreaks(result["stderr"])
-        result["files"] = format_files(result["files"])
+    def _notify_event_finished(self, event_type, data):
+        msg = dict(data)
+        self.fix_field_if_exists(msg, "stdout", fix_linebreaks)
+        self.fix_field_if_exists(msg, "stderr", fix_linebreaks)
+        self.fix_field_if_exists(msg, "src_tree", format_files)
 
-        msg = dict(result)
-        msg.update(dict(build_event='webpack_build_finished', id=build_id))
+        msg["build_event"] = event_type
         self.redis_obj.publish(self.builds_channel, json.dumps(msg))
+
+    def fix_field_if_exists(self, mapping, field, fix):
+        if field in mapping:
+            mapping[field] = fix(mapping[field])
 
 
 def get_last_message(generation_spec):

@@ -72,9 +72,27 @@ css
 """
 
 
+response_with_python = """
+def factorial(n):
+    if n <= 1: return 1
+
+    return n * factorial(n - 1)
+
+f = factorial(5)
+print(f"factorial(5) = {f}")
+"""
+
+
 class DummyCodeGenerator(TokenGenerator):
     def __call__(self, text):
         for ch in response_with_code:
+            time.sleep(0.05)
+            yield ch
+
+
+class DummyPythonGenerator(TokenGenerator):
+    def __call__(self, text):
+        for ch in response_with_python:
             time.sleep(0.05)
             yield ch
 
