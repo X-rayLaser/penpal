@@ -35,7 +35,7 @@ export function WebpackBuilds({ builds }) {
 
 
 function AccordionBuild({ buildObj, id }) {
-    let status = buildObj.status || mapToStatus(buildObj);
+    let status = mapToStatus(buildObj);
     return (
         <Accordion.Item eventKey={`${id}`}>
             <Accordion.Header>
@@ -103,7 +103,7 @@ function ToolCall({ toolObject, id }) {
 
 function mapToStatus(obj) {
     let status;
-    if (obj.result) {
+    if (obj.success || obj.result || obj.return_code === 0) {
         status = 'success';
     } else if (obj.error) {
         status = 'error';
@@ -142,7 +142,7 @@ function AccordionHeader({ name, status }) {
 }
 
 
-function BuildBody({ status, stdout, stderr, src_tree, url="" }) {
+function BuildBody({ status, stdout, stderr, src_tree, url="", error="" }) {
     let files = src_tree;
     let tree = files.map(({ name }) => name);
 
@@ -164,7 +164,7 @@ function BuildBody({ status, stdout, stderr, src_tree, url="" }) {
                 className="mb-3"
                 >
 
-                {url && (
+                {error.length === 0 && url && (
                     <Tab eventKey="link" title="App URL">
                         <div className="mb-3">
                             <Link to={url}>{url}</Link>
@@ -184,6 +184,14 @@ function BuildBody({ status, stdout, stderr, src_tree, url="" }) {
                     <Tab eventKey="stderr" title="STDERR">
                         <div className="mb-3">
                             <div>{prerenderedStderr}</div>
+                        </div>
+                    </Tab>
+                )}
+
+                {error && (
+                    <Tab eventKey="error" title="Errors">
+                        <div className="mb-3">
+                            <div>{error}</div>
                         </div>
                     </Tab>
                 )}

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from urllib.parse import urlparse
 import json
 import sys
 import os
@@ -442,22 +443,27 @@ class CommandExecutor:
         context["id"] = uuid.uuid4().hex
         self.agent.notify(self.event_started, context=context)
         result_dict = self.run_command()
+        self.decorate_result(result_dict)
         result_dict.update(context or {})
         self.agent.notify(self.event_finished, result=result_dict)
         return result_dict
 
+    def decorate_result(self, result_dict):
+        pass
+
     def run_command(self):
         try:
             result = self.command(**self.args_dict)
-            stdout = result["stdout"]
-            stderr = result["stderr"]
-            return_code = result["return_code"]
+        except Exception as e:
+            result = dict(error=str(e))
+        else:
+            stdout = result.get("stdout")
+            stderr = result.get("stderr")
+            return_code = result.get("return_code")
 
             text = self.format_output(stdout, stderr, return_code)
             channels = ["sandbox"]
             self.agent._create_and_process_message(self.agent.chat_factory.create_ai_msg, channels, text)
-        except Exception as e:
-            result = dict(error=str(e))
 
         return result
 
@@ -469,6 +475,14 @@ class CommandExecutor:
 class BuildCommandExecutor(CommandExecutor):
     event_started = "build_started"
     event_finished = "build_finished"
+
+    def __init__(self, agent, command, args_dict, output_template="", base_url=""):
+        super().__init__(agent, command, args_dict, output_template)
+        self.base_url = base_url
+
+    def decorate_result(self, result_dict):
+        if result_dict.get('url'):
+            result_dict['url'] = self.base_url + result_dict['url']
 
 
 class CodeExecutor(CommandExecutor):
@@ -493,8 +507,11 @@ class BaseSandbox(ObservableMixin):
 
         args_dict = dict(url=self.endpoint, src_tree=src_tree)
         output_template = 'BUILD START\n{}\nBUILD END'
+        parsed_uri = urlparse(self.endpoint)
+        base_url = '{uri.scheme}://{uri.netloc}'.format(uri=parsed_uri)
         executor = BuildCommandExecutor(self.agent, command=run_build_remotely,
-                                        args_dict=args_dict, output_template=output_template)
+                                        args_dict=args_dict, output_template=output_template,
+                                        base_url=base_url)
         return executor(context)
 
     def run_code(self, src_tree, launcher, **extra_context):
@@ -525,7 +542,7 @@ class StyledReactComponentSandbox(BaseSandbox):
     project_type = STYLED_REACT_COMPONENT_PROJECT
 
     def __call__(self, src_tree):
-        return self.build_code(src_tree, build_tool="webpack", url="http://localhost")
+        return self.build_code(src_tree, build_tool="webpack")
 
 
 class InterpretableLanguageSandbox(BaseSandbox):
