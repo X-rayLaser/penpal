@@ -30,4 +30,5 @@ def default_configuration_data(user):
         'system_message': system_msg,
         'preset': preset,
         'tools': [],
+        'sandboxes': {}
     }

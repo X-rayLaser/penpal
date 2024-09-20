@@ -1,88 +1,13 @@
 import unittest
-import inspect
 import base64
 from io import BytesIO
 from dataclasses import dataclass
 from django.test import TestCase
 from django.contrib.auth.models import User
 from chats.tests.common import default_configuration_data, default_preset_data, default_system_msg_data
-from tools.api_calls import TaggedApiCallBackend, ApiFunctionCall, ApiCallNotFoundError
 from chats import models, serializers
 from django.db.models import Model
 from rest_framework.serializers import BaseSerializer
-
-
-class FindApiCallTests(unittest.TestCase):
-    def setUp(self):
-        self.backend = TaggedApiCallBackend({})
-
-    def test_could_not_find(self):
-        text = ''
-        self.assertRaises(ApiCallNotFoundError, self.backend.find_api_call, text)
-    
-        text = '    '
-        self.assertRaises(ApiCallNotFoundError, self.backend.find_api_call, text)
-    
-        text = 'hello world'
-        self.assertRaises(ApiCallNotFoundError, self.backend.find_api_call, text)
-    
-    def test_can_find_empty_api_call(self):
-        text = '<api></api>'
-        api_call, offset = self.backend.find_api_call(text)
-        self.assertEqual(api_call, ApiFunctionCall('', []))
-        self.assertEqual(0, offset)
-
-        text = ' <api></api>'
-        api_call, offset = self.backend.find_api_call(text)
-        self.assertEqual(api_call, ApiFunctionCall('', []))
-        self.assertEqual(1, offset)
-
-        text = 'abc<api></api>afa'
-        api_call, offset = self.backend.find_api_call(text)
-        self.assertEqual(api_call, ApiFunctionCall('', []))
-        self.assertEqual(3, offset)
-
-    def test_can_find_valid_api_call(self):
-        text = 'abc<api>CalculatOR(AdD, 3, 9)</api>afa'
-        api_call, offset = self.backend.find_api_call(text)
-        self.assertEqual(api_call, ApiFunctionCall('calculator', ['add', '3', '9']))
-        self.assertEqual(3, offset)
-
-        text = 'abc<api>CalculatOR(AdD,3,   9)</api>afa'
-        api_call, offset = self.backend.find_api_call(text)
-        self.assertEqual(api_call, ApiFunctionCall('calculator', ['add', '3', '9']))
-        self.assertEqual(3, offset)
-
-        text = 'abc<api>CalculatOR(add)</api>afa'
-        api_call, offset = self.backend.find_api_call(text)
-        self.assertEqual(api_call, ApiFunctionCall('calculator', ['add']))
-        self.assertEqual(3, offset)
-
-        text = 'abc<api>CalculatOR()</api>afa'
-        api_call, offset = self.backend.find_api_call(text)
-        self.assertEqual(api_call, ApiFunctionCall('calculator', []))
-        self.assertEqual(3, offset)
-
-    def test_can_find_malformed_api_call(self):
-        text = 'abc<apiCalculatOR(add, 3, 9)</api>def'
-        api_call, offset = self.backend.find_api_call(text)
-        self.assertEqual(api_call, ApiFunctionCall('calculator', ['add', '3', '9']))
-        self.assertEqual(3, offset)
-
-        text = 'abcapi>CalculatOR(add, 3, 9)</api>def'
-        api_call, offset = self.backend.find_api_call(text)
-        self.assertEqual(api_call, ApiFunctionCall('calculator', ['add', '3', '9']))
-        self.assertEqual(3, offset)
-
-        text = 'abc<api>CalculatOR(add, 3, 9)/api>def'
-        api_call, offset = self.backend.find_api_call(text)
-        self.assertEqual(api_call, ApiFunctionCall('calculator', ['add', '3', '9']))
-        self.assertEqual(3, offset)
-
-        text = 'abc<api>CalculatOR(add, 3, 9)</apidef'
-        api_call, offset = self.backend.find_api_call(text)
-        self.assertEqual(api_call, ApiFunctionCall('calculator', ['add', '3', '9']))
-        self.assertEqual(3, offset)
 
 
 class EndPointCreateTests:
@@ -369,6 +294,7 @@ class ConfigurationTestCase(AbstractViewSetTestCase):
             'system_message': system_msg,
             'preset': preset,
             'tools': [],
+            'sandboxes': {}
         }
 
         self.request_data = dict(self.object_data)
@@ -455,6 +381,7 @@ class BaseChatTestCase(AbstractViewSetTestCase):
         conf_ro = dict(id=1,
                        name='myconf',
                        tools=[],
+                       sandboxes={},
                        user=self.user.username,
                        system_message=1,
                        system_message_ro=sys_msg,
@@ -912,8 +839,6 @@ def load_tests(loader, standard_tests, pattern):
     """Allows to specify which tests to run manually"""
     suite = unittest.TestSuite()
     base_test_cases = [PresetsTestCase, SystemMessageTestCase, ConfigurationTestCase]
-    
-    suite.addTest(unittest.defaultTestLoader.loadTestsFromTestCase(FindApiCallTests))
 
     suite.addTest(unittest.defaultTestLoader.loadTestsFromTestCase(ChatCreateRetrieveDeleteTestCase))
     suite.addTest(unittest.defaultTestLoader.loadTestsFromTestCase(ChatPatchTestCase))

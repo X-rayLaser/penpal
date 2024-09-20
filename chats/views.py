@@ -36,17 +36,12 @@ from .utils import join_wavs
 
 
 import llm_utils
-from tools import llm_tools, get_specification
-from tools.api_calls import (
-    find_api_call,
-    make_api_call,
-    ApiFunctionCall,
-    ApiCallNotFoundError
-)
+
 from tts import tts_backend
 from stt import stt_backend
 from .pagination import DefaultPagination
 from .tasks import generate_llm_response
+from pygentify.tool_calling import tool_registry, default_tool_use_backend, create_docs
 
 
 class BinaryRenderer(BaseRenderer):
@@ -313,7 +308,7 @@ def message_detail(request, pk):
 
 @api_view(['get'])
 def supported_tools(request):
-    tools = [tool.lower() for tool in llm_tools.keys()]
+    tools = [tool.capitalize() for tool in tool_registry.keys()]
     return Response(tools)
 
 
@@ -329,44 +324,8 @@ def tools_specification(request):
     conf_id = request.query_params.get('conf_id')
     configuration = Configuration.objects.get(pk=conf_id)
 
-    full_spec = get_specification(configuration)
+    tool_use_helper = default_tool_use_backend()
+    full_spec = create_docs(tool_use_helper, tools=configuration.tools)
+
     print('full spec:\n', full_spec)
     return Response({ 'spec': full_spec })
-
-
-# todo: delete it
-@api_view(['GET'])
-def find_api_call_view(request):
-    text = request.query_params.get('text')
-
-    try:
-        api_call, offset = find_api_call(text)
-        res = {
-            'offset': offset,
-            'api_call': api_call.todict()
-        }
-    except ApiCallNotFoundError:
-        res = {}
-
-    return Response(res)
-
-
-# todo: delete it
-@api_view(['GET'])
-def call_api_view(request):
-    name = request.query_params.get('name')
-    arg_string = request.query_params.get('arg_string')
-
-
-    print('query params', request.query_params, 'tool', name, 'arg string', arg_string, 'llm_tools', llm_tools)
-    args = arg_string.split(",")
-    args = [arg.strip().lower() for arg in args]
-
-    api_call = ApiFunctionCall(name, args)
-    api_call_string = make_api_call(api_call)
-
-    print('api_call_string', api_call_string)
-
-    return Response({
-        'api_call_string': api_call_string
-    })

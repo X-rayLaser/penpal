@@ -5,7 +5,6 @@ import markdown
 import bleach
 from rest_framework import serializers
 from .models import SystemMessage, Preset, Configuration, Chat, Message, Attachment, SpeechSample
-from tools.api_calls import backend
 
 
 class SpeechSampleSerializer(serializers.ModelSerializer):
@@ -102,10 +101,8 @@ class MessageSerializer(serializers.ModelSerializer):
         read_only_fields = ['replies', 'audio']
 
     def get_clean_text(self, obj):
-        open_tag = backend.open_apicall_tag
-        tags_to_remove = [(backend.get_apicall_open_tag(), backend.get_apicall_close_tag()),
-                          (backend.get_result_open_tag(), backend.get_result_close_tag()),
-                          (backend.get_error_open_tag(), backend.get_error_close_tag())]
+        # todo: use better representation of messages in Message that separates tool calls from normal text
+        tags_to_remove = []
 
         output = obj.text
         for open_tag, close_tag in tags_to_remove:

@@ -17,20 +17,14 @@ import llm_utils
 import tts
 from chats.models import SpeechSample, Message
 from .serializers import MessageSerializer
-from tools.api_calls import (
-    find_api_call,
-    make_api_call,
-    ApiFunctionCall,
-    ApiCallNotFoundError
-)
+
 from .utils import join_wavs
-from tools import get_specification
 from pygentify import (
     Agent, OutputDevice, TextCache, TooManyRoundsError, sandboxes_registry
 )
 from pygentify.llm_backends import LlamaCpp, GenerationSpec as PygentifySpec
 from pygentify.messages import JinjaChatFactory
-from pygentify.tool_calling import SimpleTagBasedToolUse, tool_registry
+from pygentify.tool_calling import SimpleTagBasedToolUse, tool_registry, create_docs
 
 TOKEN_STREAM = 'token_stream'
 SPEECH_CHANNEL = 'speech_stream'
@@ -248,25 +242,16 @@ def get_saved_history(last_message):
     return list(reversed(chat_history))
 
 
-def get_system_message(first_message):
+def get_system_message(first_message, tool_use_helper):
     config = first_message.chat.configuration
 
     system_message = first_message.chat.system_message or ''
 
-    if (config.tools):
-        system_message += get_specification(config)
+    docs = create_docs(tool_use_helper, tools=config.tools)
+
+    if (docs):
+        system_message += docs
     return system_message
-
-
-def get_prompt(message, chat_encoder_cls):
-    messages = get_saved_history(message)
-    first_message = messages[0]
-    config = first_message.chat.configuration
-    system_message = get_system_message(first_message)
-
-    template_spec = (config and config.template_spec) or chatTemplate
-    chat_encoder = chat_encoder_cls(template_spec)
-    return chat_encoder(system_message, messages)
 
 
 class ProcessorDevice(OutputDevice):
@@ -318,7 +303,9 @@ class PygentifyTextGenerator:
         output_device = ProcessorDevice(self.redis_obj, self.tokens_channel, self)
         temp_output_device = OutputDevice()
 
-        tools = tool_registry
+        spec_tools = generation_spec.tools or []
+        tool_names = [tool.lower() for tool in spec_tools]
+        tools = {tool: tool_registry[tool] for tool in tool_names if tool in tool_registry}
         agent = Agent(llm, tools=tools, system_message="", output_device=output_device,
                       temp_output_device=temp_output_device, max_rounds=1)
         
@@ -509,7 +496,7 @@ def encode_chat_thread(last_message):
     msg_factory = JinjaChatFactory('llama3', tool_use)
     
     db_history = get_saved_history(last_message)
-    system_message = get_system_message(db_history[0])
+    system_message = get_system_message(db_history[0], tool_use)
 
     history = []
     if system_message:
@@ -537,13 +524,12 @@ def generate_response_message(generation_spec_dict, socket_session_id, redis_obj
 
     process_attachments(message)
 
+    # todo: add back LLava support
     launch_params = generation_spec.inference_config.get('launch_params')
     if launch_params and "mmprojector" in launch_params:
         chat_renderer_cls = ChatRendererToList
     else:
         chat_renderer_cls = ChatRendererToString
-
-    generation_spec.prompt = get_prompt(message, chat_renderer_cls)
 
     queue = Queue()
 
@@ -551,10 +537,12 @@ def generate_response_message(generation_spec_dict, socket_session_id, redis_obj
     consumer.start()
 
     message_history = get_saved_history(message)
-    sandboxes = message_history[0].chat.configuration.sandboxes
+    configuration = message_history[0].chat.configuration
+
     # todo: monkey patching will do for now
     generation_spec.history = encode_chat_thread(message)
-    generation_spec.sandboxes = sandboxes
+    generation_spec.sandboxes = configuration.sandboxes
+    generation_spec.tools = configuration.tools
 
     producer = PygentifyProducer(queue, redis_object, token_channel, builds_channel)
     try:

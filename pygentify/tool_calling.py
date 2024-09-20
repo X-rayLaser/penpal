@@ -1,5 +1,6 @@
 import re
 import json
+import os
 from dataclasses import dataclass
 from inspect import signature
 from .chat_render import ChatRendererToString, default_template
@@ -228,3 +229,50 @@ def register(name=None):
 
 def default_tool_use_backend():
     return SimpleTagBasedToolUse.create_default()
+
+
+def create_docs(tool_use_backend, **kwargs):
+    tools = kwargs.get('tools', []) or []
+    func_template = kwargs.get("func_doc_template", "function_doc.jinja")
+    api_template = kwargs.get("api_doc_template", "api_doc.jinja")
+
+    tools = map(normalize, tools)
+    chosen_tools = [tool for tool in tools if tool["name"] in tool_registry]
+    func_docs = []
+    for tool in chosen_tools:
+        doc_file = tool.get('doc_file')
+
+        if doc_file and os.path.isfile(doc_file):
+            doc_text = load_doc_file(doc_file)
+        else:
+            tool_name = tool['name']
+            func = tool_registry[tool_name]
+            doc_text = document_function(tool_name, func, tool_use_backend, func_template)
+        func_docs.append(doc_text)
+
+    template = env.get_template(api_template)
+    return template.render(func_docs=func_docs)
+
+
+def normalize(item):
+    item = dict(name=item) if isinstance(item, str) else dict(item)
+    item["name"] = item.get("name", "").lower()
+    return item
+
+
+def document_function(name, func, tool_use_helper, func_template):
+    doc_str = func.__doc__ or "Documentation was not provided for the function"
+    sig = signature(func)
+    examples = []
+    if hasattr(func, 'usage_examples'):
+        for arg_dict in func.usage_examples:
+            tool_use_str = tool_use_helper.render_tool_call(name, arg_dict)
+            examples.append(tool_use_str)
+
+    template = env.get_template(func_template)
+    return template.render(name=name, signature=str(sig), doctext=doc_str, usage_examples=examples)
+
+
+def load_doc_file(doc_file):
+    with open(doc_file) as f:
+        return f.read()
