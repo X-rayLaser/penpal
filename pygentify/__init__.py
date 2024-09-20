@@ -577,6 +577,14 @@ class CPlusPlusSandbox(CompiledLanguageSandbox):
     launcher = None
 
 
+# todo use class decorator or metaclass to automatically register Sandbox classes
+sandboxes_registry = {
+    STYLED_REACT_COMPONENT_PROJECT: StyledReactComponentSandbox,
+    PYTHON_PROJECT: PythonSandbox,
+    JAVASCRIPT_PROJECT: JavascriptSandbox
+}
+
+
 class NullAssistant:
     def ask_question(self, text):
         raise NotImplementedError

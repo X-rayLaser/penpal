@@ -62,6 +62,8 @@ class Configuration(models.Model):
 
     voice_id = models.CharField(max_length=500, blank=True, null=True)
 
+    sandboxes = models.JSONField(blank=True, null=True)
+
     user = models.ForeignKey(User, related_name='configurations', on_delete=models.CASCADE)
 
     def __str__(self):

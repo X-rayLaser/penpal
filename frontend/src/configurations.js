@@ -221,7 +221,9 @@ class NewConfigurationForm extends React.Component {
             loadingPresets: true,
             tools: [],
             supportedTools: [],
-            chatTemplate: ""
+            chatTemplate: "",
+            pythonServerUrl: "",
+            reactComponentServerUrl: ""
         };
 
         this.handleNameChange = this.handleNameChange.bind(this);
@@ -231,6 +233,9 @@ class NewConfigurationForm extends React.Component {
         this.handleCheck = this.handleCheck.bind(this);
         this.handleTemplateInput = this.handleTemplateInput.bind(this);
         this.handleVoiceChange = this.handleVoiceChange.bind(this);
+
+        this.handlePythonServerUrlChange = this.handlePythonServerUrlChange.bind(this);
+        this.handleReactComponentServerUrlChange = this.handleReactComponentServerUrlChange.bind(this);
     }
 
     componentDidMount() {
@@ -321,13 +326,32 @@ class NewConfigurationForm extends React.Component {
 
     }
 
+    handlePythonServerUrlChange(e) {
+        this.setState({ pythonServerUrl: e.target.value });
+    }
+
+    handleReactComponentServerUrlChange(e) {
+        this.setState({ reactComponentServerUrl: e.target.value });
+    }
+
     handleSubmit(e) {
         e.preventDefault();
         let preset = this.state.nameToPreset[this.state.selectedPresetName];
 
+        let sandboxes = {};
+
+        if (this.state.pythonServerUrl) {
+            sandboxes["PYTHON_PROJECT"] = this.state.pythonServerUrl;
+        }
+
+        if (this.state.reactComponentServerUrl) {
+            sandboxes["STYLED_REACT_COMPONENT_PROJECT"] = this.state.reactComponentServerUrl;
+        }
+
         let data = {
             name: this.state.name,
             tools: this.state.tools,
+            sandboxes,
             template_spec: this.state.chatTemplate,
             voice_id: this.state.selectedVoiceId
         };
@@ -429,6 +453,27 @@ class NewConfigurationForm extends React.Component {
                     <div>{checkboxes}</div>
                 </Form.Group>
                 }
+
+                <Row className="mb-3">
+                    <Form.Label htmlFor="python_sandbox_url" column="lg" sm={4} lg={2}>Python server</Form.Label>
+                    <Col>
+                        <Form.Control size="lg" id="python_sandbox_url" name="name" type="text"
+                                        placeholder="URL of the server with Python environment" 
+                                        value={this.state.pythonServerUrl}
+                                        onChange={this.handlePythonServerUrlChange} />
+                    </Col>
+                </Row>
+
+                <Row className="mb-3">
+                    <Form.Label htmlFor="react_component_sandbox_url" column="lg" sm={4} lg={2}>React Component server</Form.Label>
+                    <Col>
+                        <Form.Control size="lg" id="react_component_sandbox_url" name="name" type="text"
+                                        placeholder="URL of the server with React+webpack environment" 
+                                        value={this.state.reactComponentServerUrl}
+                                        onChange={this.handleReactComponentServerUrlChange} />
+                    </Col>
+                </Row>
+
                 <Button type="submit">Create configuration</Button>
             </Form>
         );

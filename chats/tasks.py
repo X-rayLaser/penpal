@@ -26,7 +26,7 @@ from tools.api_calls import (
 from .utils import join_wavs
 from tools import get_specification
 from pygentify import (
-    Agent, OutputDevice, TextCache, TooManyRoundsError, PythonSandbox, StyledReactComponentSandbox
+    Agent, OutputDevice, TextCache, TooManyRoundsError, sandboxes_registry
 )
 from pygentify.llm_backends import LlamaCpp, GenerationSpec as PygentifySpec
 from pygentify.messages import JinjaChatFactory
@@ -322,12 +322,10 @@ class PygentifyTextGenerator:
         agent = Agent(llm, tools=tools, system_message="", output_device=output_device,
                       temp_output_device=temp_output_device, max_rounds=1)
         
-        agent.add_sandbox(PythonSandbox(
-            agent, endpoint="http://localhost:9800/run_code/"
-        ))
-        agent.add_sandbox(StyledReactComponentSandbox(
-            agent, endpoint="http://172.17.0.1:9900/make_react_app/"
-        ))
+        sandboxes = generation_spec.sandboxes or {}
+        for name, endpoint in sandboxes.items():
+            sandbox_cls = sandboxes_registry.get(name)
+            agent.add_sandbox(sandbox_cls(agent, endpoint))
 
         agent.add_listener("tool_call_started", self.process_tool_call)
         agent.add_listener("tool_call_finished", self.process_tool_result)
@@ -552,8 +550,12 @@ def generate_response_message(generation_spec_dict, socket_session_id, redis_obj
     consumer = Consumer(queue, redis_object, socket_session_id, generation_spec.voice_id)
     consumer.start()
 
+    message_history = get_saved_history(message)
+    sandboxes = message_history[0].chat.configuration.sandboxes
     # todo: monkey patching will do for now
     generation_spec.history = encode_chat_thread(message)
+    generation_spec.sandboxes = sandboxes
+
     producer = PygentifyProducer(queue, redis_object, token_channel, builds_channel)
     try:
         response_text = producer(generation_spec)

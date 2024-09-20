@@ -665,7 +665,6 @@ class ActiveChat extends React.Component {
                     }]
                 }));
             } else if (payload.event === "build_finished") {
-                console.log("build finished", payloadData)
                 this.setState(prevState => {
                     let active_builds = prevState.active_builds.filter(build => build.id !== payloadData.id);
                     let finished_builds = [...prevState.finished_builds, payloadData];
