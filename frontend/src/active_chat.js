@@ -23,7 +23,7 @@ import {
 import { CollapsibleLLMSettings } from './presets';
 import { CollapsibleEditableSystemMessage } from './components';
 import { GenericFetchJson, csrftoken } from './generic_components';
-import { WebpackBuilds, WebpackBuildsContainer, ToolCallSection } from './builds';
+import { WebpackBuilds, WebpackBuildsContainer, ToolCallSection, ProgramSection } from './builds';
 
 
 const LLAMA3_MODEL = "llama_3";
@@ -224,6 +224,7 @@ function AIMessage(props) {
 
 function ReplyInProgress(props) {
     let toolCalls = [...props.finished_tool_calls, ...props.pending_tool_calls];
+    let programs = [...props.finished_programs, ...props.running_programs];
     return (
         <Card bg="secondary" text="light" className="mb-3">
             <Card.Header>
@@ -252,6 +253,13 @@ function ReplyInProgress(props) {
                     <div>
                         <div>Running tools</div>
                         <ToolCallSection toolCalls={toolCalls} />
+                    </div>
+                )}
+
+                {programs.length > 0 && (
+                    <div>
+                        <div>Running programs</div>
+                        <ProgramSection programs={programs} />
                     </div>
                 )}
             </Card.Body>
@@ -320,6 +328,8 @@ class ActiveChat extends React.Component {
 
             active_builds: [],
             finished_builds: [],
+            running_programs: [],
+            finished_programs: [],
             pending_tool_calls: [],
             finished_tool_calls: []
         };
@@ -580,7 +590,9 @@ class ActiveChat extends React.Component {
             active_builds: [],
             finished_builds: [],
             pending_tool_calls: [],
-            finished_tool_calls: []
+            finished_tool_calls: [],
+            running_programs: [],
+            finished_programs: [],
         });
 
         this.saveSystemMessage();
@@ -901,6 +913,8 @@ class ActiveChat extends React.Component {
                 {this.state.inProgress && (
                     <ReplyInProgress text={this.state.completion}
                                      builds={this.state.active_builds}
+                                     running_programs={this.state.running_programs}
+                                     finished_programs={this.state.finished_programs}
                                      pending_tool_calls={this.state.pending_tool_calls}
                                      finished_tool_calls={this.state.finished_tool_calls} />
                 )}
@@ -919,6 +933,16 @@ class ActiveChat extends React.Component {
                         </Card.Body>
                     </Card>
                 )}
+                
+                {!this.state.inProgress && this.state.finished_programs.length > 0 && (
+                    <Card className="mb-3">
+                        <Card.Header>Finished programs</Card.Header>
+                        <Card.Body>
+                            <ProgramSection programs={this.state.finished_programs} />
+                        </Card.Body>
+                    </Card>
+                )}
+                
                 <PromptForm submissionErrors={this.state.submissionErrors}
                     onSubmit={this.handleSubmitPrompt}
                     onTextChange={this.handleInput}

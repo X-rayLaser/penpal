@@ -89,17 +89,22 @@ class SolutionResponse(BaseResponse):
 
 
 class TextCompleter:
-    def __init__(self, llm):
+    def __init__(self, llm, stop_token="```"):
         self.llm = llm
         self.on_token = lambda token: token
+        self.stop_token = stop_token
 
     def __call__(self, input_text):
         raw_response = ""
 
         for token in self.llm(input_text):
-            messenger.publish(TokenArrivedEvent(token))
-            self.on_token(token)
-            raw_response += token
+            if self.should_stop(raw_response, token):
+                raw_response, last_token = finilize_response(raw_response, token)
+                self.broadcast_token(last_token)
+                break
+            else:
+                raw_response += token
+                self.broadcast_token(token)
 
         if hasattr(self.llm, "response_data"):
             event_data = (raw_response, self.llm.response_data)
@@ -109,6 +114,24 @@ class TextCompleter:
                 raise RunOutOfContextError("LLM failed generating response: ran out of context")
 
         return raw_response
+
+    def broadcast_token(self, token):
+        messenger.publish(TokenArrivedEvent(token))
+        self.on_token(token)
+
+    def should_stop(self, raw_response, new_token):
+        text = raw_response + new_token
+        return text.count(self.stop_token) == 2
+
+
+def finilize_response(text, token):
+    suffix = ""
+    for ch in token:
+        if not text.endswith("```"):
+            text += ch
+            suffix += ch
+
+    return text, suffix
 
 
 class RunOutOfContextError(Exception):

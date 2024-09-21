@@ -83,7 +83,7 @@ class Chat(models.Model):
 
 
 class Message(models.Model):
-    text = models.CharField(max_length=4096)
+    text = models.CharField(max_length=8000)
     parent = models.ForeignKey('Message', related_name='replies', on_delete=models.CASCADE, 
                                blank=True, null=True)
 

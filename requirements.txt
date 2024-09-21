@@ -16,3 +16,4 @@ behave
 selenium
 PyYAML
 Jinja2
+pygments

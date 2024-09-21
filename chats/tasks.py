@@ -296,9 +296,9 @@ class PygentifyTextGenerator:
 
     def __call__(self, generation_spec):
         llm = llm_utils.token_generator
-        stop_word = ["<|tool_use_end|>", "```\n"]
+        stop_word = ["<|tool_use_end|>"]
         #stop_word = generation_spec.stop_word # todo: this should work
-        llm.set_spec(generation_spec.sampling_config, stop_word)
+        llm.set_spec(generation_spec.sampling_config, stop_word=stop_word)
 
         output_device = ProcessorDevice(self.redis_obj, self.tokens_channel, self)
         temp_output_device = OutputDevice()
@@ -307,7 +307,7 @@ class PygentifyTextGenerator:
         tool_names = [tool.lower() for tool in spec_tools]
         tools = {tool: tool_registry[tool] for tool in tool_names if tool in tool_registry}
         agent = Agent(llm, tools=tools, system_message="", output_device=output_device,
-                      temp_output_device=temp_output_device, max_rounds=1)
+                      temp_output_device=temp_output_device, max_rounds=5)
         
         sandboxes = generation_spec.sandboxes or {}
         for name, endpoint in sandboxes.items():

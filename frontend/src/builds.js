@@ -59,6 +59,13 @@ export function ToolCallSection({ toolCalls }) {
     );
 }
 
+
+export function ProgramSection({ programs }) {
+    return <WebpackBuilds builds={programs} />;
+}
+
+
+
 function ToolCall({ toolObject, id }) {
     let status = mapToStatus(toolObject);
     let name = toolObject.name;

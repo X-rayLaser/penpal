@@ -178,12 +178,8 @@ class SimpleTagBasedToolUse(GenericToolUse):
 
 
 
-def find_code(response):
+def find_code_section(response):
     start_str = end_str = "```"
-    language = None
-
-    PYTHON_LANG = 'python'
-    JS_LANG = 'javascript'
 
     try:
         idx_start = response.index(start_str)
@@ -195,15 +191,63 @@ def find_code(response):
 
         code = response[idx_start + len(start_str):idx_end]
 
-        if code.lower().startswith(PYTHON_LANG):
-            language = PYTHON_LANG
-        
-        if code.lower().startswith(JS_LANG):
-            language = JS_LANG
-
-        return prefix, code, language
+        result = (prefix, code) if code.strip() else None
+        return result
     except ValueError:
         return None
+
+
+def parse_code_section(code_section, languages=None):
+    languages = languages or []
+    languages = [lang.lower() for lang in languages]
+
+    code_section = code_section.strip()
+    if not code_section:
+        return None
+
+    language = None
+    code_idx = 0
+    for lang in languages:
+        if code_section.lower().startswith(lang):
+            language = lang
+            idx = code_section.lower().index(lang)
+            code_idx = idx + len(lang)
+            break
+
+    code = code_section[code_idx:]
+    code = code.strip()
+    if code:
+        return code, language
+    return None
+
+
+def detect_language(code):
+    if contains_python(code):
+        return "python"
+
+    if contains_js(code):
+        return "javascript"
+
+    return None
+
+
+def contains_python(code):
+    for_loop = re.compile("for[\s]+[a-zA-Z_]+[a-zA-Z0-9_]*[\s]+in[\s]+range\(.*\):[\n\s]")
+
+    if_condition = re.compile("if[\s]+.*:\n")
+    elif_condition = re.compile("elif[\s]+.*:\n")
+
+    patterns = [re.compile('def'), for_loop, if_condition, elif_condition]
+    return any(pattern.search(code) for pattern in patterns)
+
+
+def contains_js(code):
+    import_pattern = re.compile("import[\s]+[a-zA-Z]+[\s]+from.*\n")
+    arrow_func = re.compile("const [a-zA-Z0-9_]+[\s]+=[\s]+[a-zA-Z0-9_][\s]+=>.*")
+    
+    if_condition = re.compile("if \([\s]+.*\) {")
+    patterns = [import_pattern, arrow_func, if_condition]
+    return any(pattern.search(code) for pattern in patterns)
 
 
 tool_registry = {}

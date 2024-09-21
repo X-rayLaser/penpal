@@ -117,7 +117,7 @@ class Agent(ObservableMixin):
     default_done_tool = lambda *args, **kwargs: kwargs
 
     def __init__(self, llm, tools, done_tool=None, system_message="",
-                 max_rounds=5, output_device=None, temp_output_device=None):
+                 max_rounds=5, output_device=None, temp_output_device=None, eager_execution=True, code_stitching=True):
         self.llm = llm
         self.tools = tools
         self.done_tool = done_tool or self.default_done_tool
@@ -125,10 +125,14 @@ class Agent(ObservableMixin):
         self.max_rounds = max_rounds
         self.output_device = output_device or OutputDevice()
         self.temp_output_device = temp_output_device or self.create_temp_terminal()
+        self.eager_execution = eager_execution
+        self.code_stitching = code_stitching
 
         self.sandboxes = {}
         self.sub_agents = {}
         self.parent = None
+
+        self.code_cells = []
 
         self.loading_config = FileLoadingConfig.empty_config()
 
@@ -221,15 +225,21 @@ class Agent(ObservableMixin):
         return not response.replace("\n", "").strip()
 
     def _process_response(self, response):
-        code_invocation = find_code(response)
-        if code_invocation is not None:
-            prefix, code, language = code_invocation
+        if self.eager_execution:
+            extracted_result = self._extract_code(response)
+            if extracted_result:
+                prefix, code, language = extracted_result
+                msg = self.chat_factory.create_ai_msg(f'{prefix}```{language}\n{code}```')
+                self.history.append(msg)
 
-            msg = self.chat_factory.create_ai_msg(f'{prefix}```\n{code}```')
-            self.history.append(msg)
-            self._execute_code(code)
-            return
-
+                if self.code_stitching:
+                    self.code_cells.append(code)
+                    code = "\n\n".join(self.code_cells)
+                self._run_oneoff(code, language)
+                return
+        else:
+            # todo: if project mode is on, get src tree, save it in db, notify client and return
+            pass
         if not self.tool_use_helper.contains_tool_use(response):
             self._create_and_process_message(self.chat_factory.create_ai_msg, "all", response)
             return
@@ -249,6 +259,38 @@ class Agent(ObservableMixin):
             self._create_and_process_message(self.chat_factory.create_tool_call, "all", action, arg_dict)
             self._perform_action(action, arg_dict)
 
+    def _extract_code(self, response):
+        code_invocation = find_code_section(response)
+        if code_invocation is None:
+            return None
+
+        prefix, code_section = code_invocation
+        parsed_section = parse_code_section(code_section)
+
+        if parsed_section is None:
+            return None
+
+        code, language = parsed_section
+        if not language:
+            language = detect_language(code)
+        
+        if language:
+            return prefix, code, language
+        return None
+
+    def _run_oneoff(self, code, language):
+        if language == "python":
+            ext = ".py"
+            project_type = PYTHON_PROJECT
+        else:
+            ext = ""
+            project_type = "unknown_project"
+            print("UNKONWON PROJECT")
+        name = f"program{ext}"
+
+        src_tree = [dict(name=name, content=code)]
+        self._run_in_sandbox(src_tree, project_type)
+
     def _execute_code(self, code):
         channels = ["sandbox"]
 
@@ -259,14 +301,18 @@ class Agent(ObservableMixin):
             error = e.args[0]
             self._create_and_process_message(self.chat_factory.create_ai_msg, channels, error)
         else:
-            sandbox = self.sandboxes.get(project_type)
+            self._run_in_sandbox(src_tree, project_type)
 
-            if not sandbox:
-                error = f'Cannot handle this project type: "{project_type}"'
-                self._create_and_process_message(self.chat_factory.create_ai_msg, channels, error)
-                return
+    def _run_in_sandbox(self, src_tree, project_type):
+        channels = ["sandbox"]
+        sandbox = self.sandboxes.get(project_type)
 
+        if sandbox:
             sandbox(src_tree)
+            return
+
+        error = f'Cannot handle this project type: "{project_type}"'
+        self._create_and_process_message(self.chat_factory.create_ai_msg, channels, error)
 
     def _create_and_process_message(self, create_fn, channels="all", *args):
         msg = create_fn(*args)
